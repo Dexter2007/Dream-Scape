@@ -115,10 +115,6 @@ const App: React.FC = () => {
               <div className="relative animate-fade-in-up">
                 <div className="text-center max-w-5xl mx-auto py-24 md:py-32 px-4 relative z-10">
                   
-                  <span className="inline-block py-1 px-3 rounded-full bg-white/80 backdrop-blur-sm border border-indigo-100 text-indigo-700 text-xs font-bold tracking-wide mb-6 shadow-sm">
-                    POWERED BY GEMINI AI
-                  </span>
-
                   <h1 className="text-6xl md:text-8xl font-bold tracking-tight text-slate-900 mb-8 font-serif leading-tight">
                     Redesign your <br/>
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 drop-shadow-sm">
@@ -376,7 +372,7 @@ const App: React.FC = () => {
       </div>
 
       <Header currentView={currentView} onViewChange={setCurrentView} />
-      <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 relative z-0">
+      <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-8 space-y-8 relative z-0">
         {renderContent()}
       </main>
       <Footer />

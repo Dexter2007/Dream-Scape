@@ -32,8 +32,8 @@ const TEMPLATES = [
   
   // Bedrooms
   { name: 'Cozy Bedroom', category: 'Bedroom', url: 'https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' },
-  { name: 'Master Suite', category: 'Bedroom', url: 'https://images.unsplash.com/photo-1616594039964-40891a91295f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' },
-  { name: 'Kids Room', category: 'Bedroom', url: 'https://images.unsplash.com/photo-1516054575922-f0b8eead426f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' },
+  { name: 'Master Suite', category: 'Bedroom', url: 'https://images.unsplash.com/photo-1617325247661-675ab4b64ae2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' },
+  { name: 'Kids Room', category: 'Bedroom', url: 'https://images.unsplash.com/photo-1519643381401-22c77e60520e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' },
 
   // Kitchen & Dining
   { name: 'Modern Kitchen', category: 'Kitchen', url: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' },
@@ -46,8 +46,8 @@ const TEMPLATES = [
   { name: 'Creative Studio', category: 'Office', url: 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' },
 
   // Empty / Unfurnished (Good for designing)
-  { name: 'Empty Corner', category: 'Empty', url: 'https://images.unsplash.com/photo-1505693416388-b0346ef1212b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' },
-  { name: 'Empty Room', category: 'Empty', url: 'https://images.unsplash.com/photo-1484154218962-a1c002085d2f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' },
+  { name: 'Empty Corner', category: 'Empty', url: 'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' },
+  { name: 'Empty Room', category: 'Empty', url: 'https://images.unsplash.com/photo-1493606278519-11aa9f86e40a?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' },
   { name: 'White Walls', category: 'Empty', url: 'https://images.unsplash.com/photo-1558211583-03ed8a0b3d5f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' },
 ];
 
