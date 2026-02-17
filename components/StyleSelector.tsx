@@ -3,8 +3,8 @@ import { RoomStyle } from '../types';
 import { ROOM_STYLES } from '../constants';
 
 interface StyleSelectorProps {
-  selectedStyle: RoomStyle;
-  onStyleSelect: (style: RoomStyle) => void;
+  selectedStyle: string;
+  onStyleSelect: (style: string) => void;
 }
 
 export const StyleSelector: React.FC<StyleSelectorProps> = ({ selectedStyle, onStyleSelect }) => {
@@ -29,6 +29,11 @@ export const StyleSelector: React.FC<StyleSelectorProps> = ({ selectedStyle, onS
               alt={style.label}
               className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
             />
+            
+            {/* DreamSpace Watermark on Banner */}
+            <div className="absolute top-2 right-2 z-20 opacity-60">
+               <span className="font-serif italic text-white/90 text-[10px] tracking-wider drop-shadow-md">DreamSpace</span>
+            </div>
             
             <div className="absolute bottom-0 left-0 p-3 z-20 w-full">
               <p className="text-white font-medium text-sm flex justify-between items-center">

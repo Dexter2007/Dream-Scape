@@ -15,7 +15,22 @@ export enum RoomStyle {
   Neoclassical = 'Neoclassical',
   Farmhouse = 'Farmhouse',
   Gothic = 'Gothic',
-  Baroque = 'Baroque'
+  Baroque = 'Baroque',
+  Mediterranean = 'Mediterranean',
+  Rustic = 'Rustic',
+  Bauhaus = 'Bauhaus',
+  Victorian = 'Victorian',
+  FrenchCountry = 'French Country',
+  HollywoodRegency = 'Hollywood Regency',
+  Transitional = 'Transitional',
+  ShabbyChic = 'Shabby Chic',
+  Southwestern = 'Southwestern',
+  Eclectic = 'Eclectic',
+  Tropical = 'Tropical',
+  Steampunk = 'Steampunk',
+  Memphis = 'Memphis',
+  Brutalism = 'Brutalism',
+  ArtNouveau = 'Art Nouveau'
 }
 
 export type AppView = 'redesign' | 'designer' | 'shop' | 'quiz';

@@ -34,16 +34,26 @@ const getMimeType = (base64Data: string) => {
 
 export const generateRoomRedesign = async (
   base64Image: string,
-  style: RoomStyle
+  style: string
 ): Promise<string> => {
   if (!apiKey) throw new Error("API Key not found. Please check your .env file.");
 
   const modelId = 'gemini-2.5-flash-image';
   
   const prompt = `
-    Redesign the room in this image to strictly follow the '${style}' design style. 
-    Maintain the structural integrity of the room (walls, windows, doors, perspective).
-    Change the furniture, flooring, wall colors, lighting, and decorations to match the '${style}' aesthetic perfectly.
+    Act as a professional interior design AI.
+    Redesign the room in the input image to fully embody the '${style}' design style.
+    
+    REQUIREMENTS:
+    1. STRICTLY PRESERVE: Room structure, perspective, window/door placements, and ceiling height.
+    2. TRANSFORM: Furniture, decor, materials, colors, lighting to strictly match the '${style}' aesthetic.
+    3. QUALITY: Photorealistic, high definition, natural lighting.
+    
+    MANDATORY CLEANUP (CRITICAL):
+    - DETECT and COMPLETELY REMOVE any existing watermarks, text overlays, logos, date stamps, or copyright marks from the original image. The final image must be clean of any previous branding.
+    - Inpaint the erased areas to blend seamlessly with the new design's background (walls, floor, etc).
+    - DO NOT generate any new text, letters, or characters in the image. The output must be purely visual.
+    
     Return only the generated image.
   `;
 
@@ -96,7 +106,7 @@ export const generateRoomRedesign = async (
 
 export const getDesignAdvice = async (
   base64Image: string,
-  style: RoomStyle
+  style: string
 ): Promise<DesignAdvice> => {
   if (!apiKey) throw new Error("API Key not found. Please check your .env file.");
 

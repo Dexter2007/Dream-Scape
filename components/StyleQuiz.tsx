@@ -1,79 +1,235 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RoomStyle } from '../types';
+import { ROOM_STYLES } from '../constants';
 
 interface StyleQuizProps {
-  onComplete: (style: RoomStyle) => void;
+  onComplete: (style: string) => void;
 }
 
-const QUESTIONS = [
+interface QuizOption {
+  text: string;
+  style: RoomStyle;
+}
+
+interface QuizQuestion {
+  id: number;
+  question: string;
+  options: QuizOption[];
+}
+
+const QUESTION_POOL = [
   {
-    id: 1,
-    question: "How do you want your room to feel?",
+    question: "What atmosphere do you want to create?",
     options: [
-      { text: "Clean, uncluttered, and functional", style: RoomStyle.Minimalist },
-      { text: "Cozy, warm, and inviting", style: RoomStyle.Scandinavian },
-      { text: "Bold, eclectic, and artistic", style: RoomStyle.Bohemian },
-      { text: "Sleek, futuristic, and high-tech", style: RoomStyle.Cyberpunk },
+      { text: "Serene, organic, and nature-filled", style: RoomStyle.Biophilic },
+      { text: "Sleek, uncluttered, and monochromatic", style: RoomStyle.Modern },
+      { text: "Warm, rustic, and homelike", style: RoomStyle.Farmhouse },
+      { text: "Bold, colorful, and full of curiosities", style: RoomStyle.Maximalist },
     ]
   },
   {
-    id: 2,
-    question: "Pick a material you love:",
+    question: "Which materials resonate with you?",
     options: [
-      { text: "Raw concrete and exposed brick", style: RoomStyle.Industrial },
-      { text: "Natural wood and soft textiles", style: RoomStyle.Zen },
+      { text: "Exposed brick, metal, and concrete", style: RoomStyle.Industrial },
+      { text: "Light woods, wool, and soft whites", style: RoomStyle.Scandinavian },
       { text: "Velvet, brass, and geometric patterns", style: RoomStyle.ArtDeco },
-      { text: "Glass, steel, and monochrome surfaces", style: RoomStyle.Modern },
+      { text: "High-tech surfaces, neon, and glass", style: RoomStyle.Cyberpunk },
     ]
   },
   {
-    id: 3,
-    question: "What's your ideal color palette?",
+    question: "Pick a visual aesthetic:",
     options: [
-      { text: "Neutrals, whites, and greys", style: RoomStyle.Minimalist },
-      { text: "Earthy tones like greens and browns", style: RoomStyle.Bohemian },
-      { text: "Ocean blues and sandy beiges", style: RoomStyle.Coastal },
-      { text: "Vibrant contrasting colors", style: RoomStyle.MidCenturyModern },
+      { text: "Breezy, airy, seaside vibes", style: RoomStyle.Coastal },
+      { text: "Free-spirited, patterned, and textured", style: RoomStyle.Bohemian },
+      { text: "Dark, dramatic, and moody", style: RoomStyle.Gothic },
+      { text: "Balanced blend of Japanese and Nordic", style: RoomStyle.Japandi },
     ]
   },
   {
-    id: 4,
-    question: "Which furniture piece appeals to you most?",
+    question: "What is your design priority?",
     options: [
-      { text: "A low-profile platform bed", style: RoomStyle.Zen },
-      { text: "A vintage leather Chesterfield sofa", style: RoomStyle.Industrial },
-      { text: "A teak sideboard with tapered legs", style: RoomStyle.MidCenturyModern },
-      { text: "A white slipcovered armchair", style: RoomStyle.Coastal },
+      { text: "Peace, balance, and mindfulness", style: RoomStyle.Zen },
+      { text: "Retro nostalgia from the 50s/60s", style: RoomStyle.MidCenturyModern },
+      { text: "Classical elegance and luxury", style: RoomStyle.Neoclassical },
+      { text: "Strict simplicity and essentialism", style: RoomStyle.Minimalist },
+    ]
+  },
+  {
+    question: "What kind of lighting do you prefer?",
+    options: [
+      { text: "Grand chandeliers and gold accents", style: RoomStyle.Baroque },
+      { text: "Warm, ambient, hidden lighting", style: RoomStyle.Minimalist },
+      { text: "Neon strips and colored LEDs", style: RoomStyle.Cyberpunk },
+      { text: "Abundant natural sunlight", style: RoomStyle.Biophilic },
+    ]
+  },
+  {
+    question: "Choose a furniture style:",
+    options: [
+      { text: "Low profile, functional, tatami-style", style: RoomStyle.Japandi },
+      { text: "Distressed wood and vintage finds", style: RoomStyle.Farmhouse },
+      { text: "Glossy, curvy, and mirrored", style: RoomStyle.ArtDeco },
+      { text: "Teak wood with tapered legs", style: RoomStyle.MidCenturyModern },
+    ]
+  },
+  {
+    question: "How should the room feel?",
+    options: [
+      { text: "Like a royal palace", style: RoomStyle.Baroque },
+      { text: "Like a modern art gallery", style: RoomStyle.Modern },
+      { text: "Like a cozy mountain cabin", style: RoomStyle.Farmhouse },
+      { text: "Like a zen garden", style: RoomStyle.Zen },
     ]
   }
 ];
 
+// Helper to shuffle array
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+};
+
 export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
-  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [scores, setScores] = useState<Record<string, number>>({});
+  const [result, setResult] = useState<string | null>(null);
+
+  // Initialize random quiz
+  useEffect(() => {
+    initializeQuiz();
+  }, []);
+
+  const initializeQuiz = () => {
+    // 1. Shuffle the pool
+    const shuffledPool = shuffleArray(QUESTION_POOL);
+    // 2. Select first 4 questions
+    const selectedQuestions = shuffledPool.slice(0, 4);
+    // 3. Shuffle options within each question and assign IDs
+    const finalQuestions = selectedQuestions.map((q, index) => ({
+      id: index,
+      question: q.question,
+      options: shuffleArray(q.options)
+    }));
+    
+    setQuestions(finalQuestions);
+    setCurrentQuestionIndex(0);
+    setScores({});
+    setResult(null);
+  };
 
   const handleOptionSelect = (style: RoomStyle) => {
     const newScores = { ...scores, [style]: (scores[style] || 0) + 1 };
     setScores(newScores);
 
-    if (currentQuestion < QUESTIONS.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
     } else {
-      // Find winner
-      const winner = Object.entries(newScores).reduce((a, b) => a[1] > b[1] ? a : b)[0] as RoomStyle;
-      onComplete(winner);
+      calculateFinalResult(newScores);
     }
   };
 
-  const progress = ((currentQuestion + 1) / QUESTIONS.length) * 100;
+  const calculateFinalResult = (finalScores: Record<string, number>) => {
+    const sortedScores = Object.entries(finalScores).sort((a, b) => b[1] - a[1]);
+    
+    if (sortedScores.length === 0) {
+      setResult(RoomStyle.Modern);
+      return;
+    }
+
+    const [topStyle, topScore] = sortedScores[0];
+    
+    // Logic: If there is a tie or very close scores, create a hybrid.
+    // Example: If user selected 'Modern' twice and 'Rustic' twice, we make 'Modern + Rustic'
+    let finalStyle = topStyle;
+
+    if (sortedScores.length > 1) {
+       const [secondStyle, secondScore] = sortedScores[1];
+       if (secondScore === topScore) {
+         finalStyle = `${topStyle} + ${secondStyle}`;
+       }
+    }
+    
+    setResult(finalStyle);
+  };
+
+  const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
+
+  if (questions.length === 0) return <div className="p-8 text-center">Loading quiz...</div>;
+
+  if (result) {
+    // Check if result exists in presets
+    const styleInfo = ROOM_STYLES.find(s => s.value === result);
+    // Use generic image for hybrids
+    const displayImage = styleInfo?.image || 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80';
+    const description = styleInfo?.description || `A unique fusion style tailored just for you: ${result}. This custom blend captures the best of both worlds.`;
+
+    return (
+      <div className="max-w-2xl mx-auto py-12 px-4 animate-fade-in-up">
+        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden text-center">
+          <div className="h-64 relative group">
+             <img 
+               src={displayImage} 
+               alt={result} 
+               className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" 
+             />
+             <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent flex flex-col items-center justify-end pb-8">
+                {/* Watermark */}
+                <div className="absolute top-4 right-4 opacity-70">
+                   <span className="font-serif italic text-white text-sm tracking-widest drop-shadow-lg">DreamSpace</span>
+                </div>
+                
+                <p className="text-white/80 font-medium uppercase tracking-widest text-sm mb-2">Result</p>
+                <h2 className="text-4xl md:text-5xl font-serif font-bold text-white tracking-wide shadow-black drop-shadow-lg px-4">
+                  {result}
+                </h2>
+             </div>
+          </div>
+          <div className="p-10 space-y-8 bg-white relative">
+            <div className="space-y-4">
+              <h3 className="text-2xl font-bold text-slate-900">Your preferred style is {result}</h3>
+              <div className="w-12 h-1 bg-indigo-600 mx-auto rounded-full"></div>
+              <p className="text-slate-600 text-lg leading-relaxed max-w-lg mx-auto">
+                {description}
+              </p>
+            </div>
+            
+            <div className="pt-2">
+              <button
+                onClick={() => onComplete(result)}
+                className="px-10 py-4 bg-slate-900 text-white rounded-full font-bold text-lg hover:bg-indigo-600 transition-all shadow-xl hover:shadow-indigo-500/30 transform hover:-translate-y-1 flex items-center justify-center gap-3 mx-auto"
+              >
+                <span>Design with this Style</span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                  <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
+                </svg>
+              </button>
+              <button 
+                onClick={initializeQuiz}
+                className="mt-6 text-slate-400 hover:text-slate-600 text-sm font-medium"
+              >
+                Retake Quiz
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const currentQ = questions[currentQuestionIndex];
 
   return (
-    <div className="max-w-2xl mx-auto py-12 px-4">
+    <div className="max-w-2xl mx-auto py-12 px-4 animate-fade-in-up">
       <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
         <div className="mb-8">
           <div className="flex justify-between items-end mb-2">
             <h2 className="text-2xl font-bold text-slate-900">Find Your Style</h2>
-            <span className="text-sm font-medium text-slate-500">Question {currentQuestion + 1} of {QUESTIONS.length}</span>
+            <span className="text-sm font-medium text-slate-500">Question {currentQuestionIndex + 1} of {questions.length}</span>
           </div>
           <div className="w-full bg-slate-100 rounded-full h-2">
             <div 
@@ -83,18 +239,21 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
           </div>
         </div>
 
-        <h3 className="text-xl font-medium text-slate-800 mb-6">
-          {QUESTIONS[currentQuestion].question}
+        <h3 className="text-xl font-medium text-slate-800 mb-6 min-h-[3rem]">
+          {currentQ.question}
         </h3>
 
         <div className="grid gap-4">
-          {QUESTIONS[currentQuestion].options.map((option, idx) => (
+          {currentQ.options.map((option, idx) => (
             <button
               key={idx}
               onClick={() => handleOptionSelect(option.style)}
-              className="w-full text-left p-4 rounded-xl border-2 border-slate-100 hover:border-indigo-600 hover:bg-indigo-50 transition-all duration-200 group"
+              className="w-full text-left p-4 rounded-xl border-2 border-slate-100 hover:border-indigo-600 hover:bg-indigo-50 transition-all duration-200 group flex items-center justify-between"
             >
-              <span className="text-slate-700 font-medium group-hover:text-indigo-900">{option.text}</span>
+              <span className="text-slate-700 font-medium group-hover:text-indigo-900 text-lg">{option.text}</span>
+              <div className="w-6 h-6 rounded-full border-2 border-slate-300 group-hover:border-indigo-600 flex items-center justify-center">
+                 <div className="w-3 h-3 rounded-full bg-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
             </button>
           ))}
         </div>

@@ -8,6 +8,7 @@ import { LoadingOverlay } from './components/LoadingOverlay';
 import { StyleQuiz } from './components/StyleQuiz';
 import { ShopTheLook } from './components/ShopTheLook';
 import { RoomDesigner } from './components/RoomDesigner';
+import { ImageComparisonSlider } from './components/ImageComparisonSlider';
 import { RoomStyle, GenerationResult, LoadingState, AppView } from './types';
 import { generateRoomRedesign, getDesignAdvice } from './services/geminiService';
 import { ROOM_STYLES } from './constants';
@@ -17,7 +18,7 @@ const App: React.FC = () => {
   
   // AI Redesign State
   const [originalImage, setOriginalImage] = useState<string | null>(null);
-  const [selectedStyle, setSelectedStyle] = useState<RoomStyle>(RoomStyle.Modern);
+  const [selectedStyle, setSelectedStyle] = useState<string>(RoomStyle.Modern);
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [loadingState, setLoadingState] = useState<LoadingState>({ isGenerating: false, statusMessage: '' });
   const [error, setError] = useState<string | null>(null);
@@ -31,37 +32,48 @@ const App: React.FC = () => {
   const handleDownload = (format: 'png' | 'jpeg') => {
     if (!result?.generatedImage) return;
 
-    if (format === 'png') {
-      const link = document.createElement('a');
-      link.href = result.generatedImage;
-      link.download = `dreamspace-${selectedStyle.toLowerCase()}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } else {
-      // Convert to JPEG
-      const img = new Image();
-      img.src = result.generatedImage;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          // Fill white background for transparent PNGs if any
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0);
-          const jpegUrl = canvas.toDataURL('image/jpeg', 0.9);
-          const link = document.createElement('a');
-          link.href = jpegUrl;
-          link.download = `dreamspace-${selectedStyle.toLowerCase()}.jpg`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
-      };
-    }
+    const img = new Image();
+    img.src = result.generatedImage;
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Draw white background (handles potential transparency)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw the image
+        ctx.drawImage(img, 0, 0);
+
+        // Add DreamSpace Watermark
+        const fontSize = Math.max(24, Math.floor(img.width * 0.035));
+        ctx.font = `italic 700 ${fontSize}px "Playfair Display", serif`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+        
+        // Strong shadow for visibility on all backgrounds
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        
+        const padding = Math.floor(img.width * 0.04);
+        ctx.fillText('DreamSpace', canvas.width - padding, canvas.height - padding);
+
+        const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+        const dataUrl = canvas.toDataURL(mimeType, 0.95);
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = `dreamspace-${selectedStyle.toLowerCase()}.${format}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    };
   };
 
   const handleGenerate = async () => {
@@ -92,7 +104,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleQuizComplete = (style: RoomStyle) => {
+  const handleQuizComplete = (style: string) => {
     setSelectedStyle(style);
     setCurrentView('redesign');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -249,6 +261,20 @@ const App: React.FC = () => {
 
                   {/* Style Selector inside the control panel */}
                   <div className="mt-8 pt-8 border-t border-slate-100/50">
+                     {/* Show Active Custom Style if it's not in the predefined list */}
+                     {!ROOM_STYLES.some(s => s.value === selectedStyle) && (
+                        <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center gap-3 animate-fade-in-up">
+                           <div className="bg-indigo-600 text-white p-2 rounded-lg">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                 <path d="M10 2a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 2ZM10 15a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 15ZM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 1.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM3.5 10a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3.5 10ZM14.25 10a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75ZM5.404 5.404a.75.75 0 0 1 1.06 0l1.06 1.06a.75.75 0 0 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06ZM12.47 12.47a.75.75 0 0 1 1.06 0l1.06 1.06a.75.75 0 1 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06ZM5.404 14.596a.75.75 0 0 1 0 1.06l-1.06 1.06a.75.75 0 1 1-1.06-1.06l1.06-1.06a.75.75 0 0 1 1.06 0ZM12.47 7.53a.75.75 0 0 1 0-1.06l1.06-1.06a.75.75 0 1 1 1.06 1.06l-1.06 1.06a.75.75 0 0 1-1.06 0Z" />
+                              </svg>
+                           </div>
+                           <div>
+                              <p className="text-xs text-indigo-600 font-bold uppercase tracking-wider">Active Custom Style</p>
+                              <p className="font-serif text-xl font-bold text-slate-900">{selectedStyle}</p>
+                           </div>
+                        </div>
+                     )}
                     <StyleSelector selectedStyle={selectedStyle} onStyleSelect={setSelectedStyle} />
                   </div>
                 </div>
@@ -272,13 +298,11 @@ const App: React.FC = () => {
                            {loadingState.isGenerating && <LoadingOverlay status={loadingState.statusMessage} />}
                            
                            {result?.generatedImage ? (
-                             <>
-                               <img src={result.generatedImage} alt="Redesigned Room" className="w-full h-full object-cover" />
-                               
-                               <div className="absolute bottom-6 right-6 bg-white/90 text-slate-900 text-sm font-medium px-4 py-2 rounded-full backdrop-blur-xl shadow-lg font-serif">
-                                 {selectedStyle} Design
-                               </div>
-                             </>
+                             <ImageComparisonSlider 
+                               beforeImage={result.originalImage}
+                               afterImage={result.generatedImage}
+                               label="DreamSpace"
+                             />
                            ) : (
                              <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 bg-slate-50/50">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 mb-4 opacity-50">
