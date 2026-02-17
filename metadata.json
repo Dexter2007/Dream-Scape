@@ -1,0 +1,7 @@
+{
+  "name": "DreamSpace ",
+  "description": "Transform your room with AI-powered interior design. Upload a photo, choose a style, and visualize your dream space instantly.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
