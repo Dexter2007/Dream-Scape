@@ -1,7 +1,24 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { RoomStyle, DesignAdvice } from "../types";
 
-const apiKey = process.env.API_KEY || '';
+// Safely retrieve API key from various environment configurations
+const getApiKey = (): string => {
+  // Check for Vite environment
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_KEY) {
+    return (import.meta as any).env.VITE_API_KEY;
+  }
+  // Check for standard Node/Process environment (safely)
+  try {
+    if (typeof process !== 'undefined' && process.env?.API_KEY) {
+      return process.env.API_KEY;
+    }
+  } catch (e) {
+    // Ignore ReferenceError if process is not defined
+  }
+  return '';
+};
+
+const apiKey = getApiKey();
 const ai = new GoogleGenAI({ apiKey });
 
 // Helper to clean base64 string
@@ -19,7 +36,7 @@ export const generateRoomRedesign = async (
   base64Image: string,
   style: RoomStyle
 ): Promise<string> => {
-  if (!apiKey) throw new Error("API Key not found");
+  if (!apiKey) throw new Error("API Key not found. Please check your .env file.");
 
   const modelId = 'gemini-2.5-flash-image';
   
@@ -81,7 +98,7 @@ export const getDesignAdvice = async (
   base64Image: string,
   style: RoomStyle
 ): Promise<DesignAdvice> => {
-  if (!apiKey) throw new Error("API Key not found");
+  if (!apiKey) throw new Error("API Key not found. Please check your .env file.");
 
   const modelId = 'gemini-3-flash-preview';
 
