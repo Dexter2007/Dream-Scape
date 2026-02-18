@@ -37,24 +37,35 @@ const getApiKey = (): string | undefined => {
 // Helper for delays
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Retry wrapper for API calls
-async function retryOperation<T>(operation: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
-  try {
-    return await operation();
-  } catch (error: any) {
-    // Check for Rate Limit (429) or Service Unavailable (503)
-    const isRateLimit = error.status === 429 || (error.message && error.message.includes('429'));
-    const isOverloaded = error.status === 503;
+// Retry wrapper for API calls with Aggressive Backoff
+async function retryOperation<T>(operation: () => Promise<T>, retries = 6, initialDelay = 5000): Promise<T> {
+  let delay = initialDelay;
+  
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      // Check for Rate Limit (429) or Service Unavailable (503)
+      const isRateLimit = error.status === 429 || (error.message && error.message.includes('429'));
+      const isOverloaded = error.status === 503;
 
-    if ((isRateLimit || isOverloaded) && retries > 0) {
-      console.warn(`Rate limit hit. Retrying in ${delay}ms... (${retries} attempts left)`);
-      await wait(delay);
-      // Exponential backoff: double the delay for the next retry
-      return retryOperation(operation, retries - 1, delay * 2);
+      if (isRateLimit || isOverloaded) {
+        // If this is the last retry, throw the error
+        if (i === retries - 1) throw error;
+
+        console.warn(`Rate limit hit (Attempt ${i + 1}/${retries}). Waiting ${delay/1000}s before retry...`);
+        await wait(delay);
+        
+        // Exponential backoff: double the delay
+        delay *= 2; 
+        continue;
+      }
+
+      // If it's another error (like 400 Bad Request), throw immediately
+      throw error;
     }
-
-    throw error;
   }
+  throw new Error("Maximum retries exceeded");
 }
 
 export const generateRoomRedesign = async (
@@ -120,7 +131,7 @@ export const generateRoomRedesign = async (
     }
     
     if (error.status === 429) {
-       throw new Error("System is busy (Rate Limit). Please wait a minute and try again.");
+       throw new Error("System is busy (Rate Limit). We retried several times but the server is still busy. Please wait 1 minute.");
     }
     
     throw error;
@@ -206,7 +217,7 @@ export const getDesignAdvice = async (
     }
 
     if (error.status === 429) {
-       throw new Error("System is busy (Rate Limit). Please wait a minute and try again.");
+       throw new Error("System is busy (Rate Limit). Advice generation skipped.");
     }
     
     throw error;

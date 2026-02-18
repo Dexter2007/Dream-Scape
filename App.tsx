@@ -92,7 +92,7 @@ const App: React.FC = () => {
 
     try {
       // 1. Generate Image First (High Priority)
-      setLoadingState({ isGenerating: true, statusMessage: 'Dreaming up your new room (10-15s)...' });
+      setLoadingState({ isGenerating: true, statusMessage: 'Dreaming up your new room (may take 20s+)...' });
       const generatedImg = await generateRoomRedesign(originalImage, selectedStyle);
       
       // Update result with image immediately
@@ -106,8 +106,8 @@ const App: React.FC = () => {
       setLoadingState({ isGenerating: true, statusMessage: 'Consulting interior designers...' });
       
       try {
-        // Wait 2 seconds to be safe with Free Tier rate limits
-        await new Promise(r => setTimeout(r, 2000));
+        // Wait 5 seconds to significantly reduce chance of Rate Limit
+        await new Promise(r => setTimeout(r, 5000));
         const advice = await getDesignAdvice(originalImage, selectedStyle);
         setResult(prev => prev ? { ...prev, advice } : null);
       } catch (adviceErr) {
