@@ -37,8 +37,13 @@ const getApiKey = (): string | undefined => {
 // Helper for delays
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Retry wrapper for API calls with Aggressive Backoff
-async function retryOperation<T>(operation: () => Promise<T>, retries = 6, initialDelay = 5000): Promise<T> {
+// Retry wrapper for API calls with Aggressive Backoff and Status Updates
+async function retryOperation<T>(
+  operation: () => Promise<T>, 
+  onStatusUpdate?: (msg: string) => void,
+  retries = 6, 
+  initialDelay = 10000
+): Promise<T> {
   let delay = initialDelay;
   
   for (let i = 0; i < retries; i++) {
@@ -53,10 +58,16 @@ async function retryOperation<T>(operation: () => Promise<T>, retries = 6, initi
         // If this is the last retry, throw the error
         if (i === retries - 1) throw error;
 
-        console.warn(`Rate limit hit (Attempt ${i + 1}/${retries}). Waiting ${delay/1000}s before retry...`);
+        const waitSeconds = delay / 1000;
+        console.warn(`Rate limit hit (Attempt ${i + 1}/${retries}). Waiting ${waitSeconds}s...`);
+        
+        if (onStatusUpdate) {
+          onStatusUpdate(`High traffic. Retrying in ${waitSeconds}s...`);
+        }
+
         await wait(delay);
         
-        // Exponential backoff: double the delay
+        // Exponential backoff
         delay *= 2; 
         continue;
       }
@@ -70,7 +81,8 @@ async function retryOperation<T>(operation: () => Promise<T>, retries = 6, initi
 
 export const generateRoomRedesign = async (
   base64Image: string,
-  style: string
+  style: string,
+  onStatusUpdate?: (msg: string) => void
 ): Promise<string> => {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key missing. Please set VITE_API_KEY in your .env file.");
@@ -122,16 +134,16 @@ export const generateRoomRedesign = async (
         }
       }
       throw new Error("No image generated in response.");
-    });
+    }, onStatusUpdate);
   } catch (error: any) {
     console.error("Redesign error:", error);
     
     if (error.status === 403 || (error.message && error.message.includes('leaked'))) {
-      throw new Error("Your API Key has been revoked by Google because it was exposed. Please generate a new key at aistudio.google.com.");
+      throw new Error("Your API Key has been revoked. Please generate a new key.");
     }
     
     if (error.status === 429) {
-       throw new Error("System is busy (Rate Limit). We retried several times but the server is still busy. Please wait 1 minute.");
+       throw new Error("System is currently experiencing very high traffic. Please try again in 2-3 minutes.");
     }
     
     throw error;
@@ -140,7 +152,8 @@ export const generateRoomRedesign = async (
 
 export const getDesignAdvice = async (
   base64Image: string,
-  style: string
+  style: string,
+  onStatusUpdate?: (msg: string) => void
 ): Promise<DesignAdvice> => {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key missing.");
@@ -208,18 +221,10 @@ export const getDesignAdvice = async (
 
       const jsonText = response.text || "{}";
       return JSON.parse(jsonText) as DesignAdvice;
-    });
+    }, onStatusUpdate);
   } catch (error: any) {
     console.error("Advice error:", error);
-    
-    if (error.status === 403 || (error.message && error.message.includes('leaked'))) {
-      throw new Error("API Key Revoked/Leaked. Please generate a new one.");
-    }
-
-    if (error.status === 429) {
-       throw new Error("System is busy (Rate Limit). Advice generation skipped.");
-    }
-    
+    // Silent fail for advice is handled in UI, but we throw here to let UI know
     throw error;
   }
 };

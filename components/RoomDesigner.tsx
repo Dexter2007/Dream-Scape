@@ -63,11 +63,14 @@ const CATEGORIES = ['All', 'Living', 'Bedroom', 'Kitchen', 'Office', 'Empty'];
 export const RoomDesigner: React.FC = () => {
   const [background, setBackground] = useState<string | null>(null);
   const [items, setItems] = useState<DesignerItem[]>([]);
-  // We now track multiple selected IDs
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [savedDesigns, setSavedDesigns] = useState<SavedDesign[]>([]);
   const [activeCategory, setActiveCategory] = useState('All');
+
+  // Mobile & Layout State
+  const [activeTab, setActiveTab] = useState<'add' | 'properties' | 'settings' | null>('add');
+  const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(true);
 
   // Interaction State
   const [isDragging, setIsDragging] = useState(false);
@@ -89,6 +92,14 @@ export const RoomDesigner: React.FC = () => {
       }
     }
   }, []);
+
+  // Update mobile tab when selection changes
+  useEffect(() => {
+    if (selectedItemIds.length > 0) {
+      setActiveTab('properties');
+      setIsMobileSheetOpen(true);
+    }
+  }, [selectedItemIds]);
 
   // --- Persistence ---
   const handleSaveDesign = () => {
@@ -154,12 +165,10 @@ export const RoomDesigner: React.FC = () => {
           throw new Error("Invalid file format: content is not an array");
         }
         
-        // Basic schema check for the first item if exists
         if (imported.length > 0 && (!imported[0].id || !imported[0].items)) {
            throw new Error("Invalid design format");
         }
 
-        // Filter duplicates based on ID
         const currentIds = new Set(savedDesigns.map(d => d.id));
         const newDesigns = imported.filter((d: SavedDesign) => !currentIds.has(d.id));
 
@@ -178,7 +187,7 @@ export const RoomDesigner: React.FC = () => {
       }
     };
     reader.readAsText(file);
-    event.target.value = ''; // Reset input
+    event.target.value = ''; 
   };
 
   // --- Item Management ---
@@ -199,12 +208,18 @@ export const RoomDesigner: React.FC = () => {
     
     setItems([...items, newItem]);
     setSelectedItemIds([newItem.id]);
+    // On mobile, switch to properties view immediately after adding
+    if (window.innerWidth < 768) {
+      setActiveTab('properties');
+    }
   };
 
   const handleDeleteSelected = () => {
     if (selectedItemIds.length > 0) {
       setItems(items.filter(i => !selectedItemIds.includes(i.id)));
       setSelectedItemIds([]);
+      // Switch back to add tab if we deleted everything selected
+      setActiveTab('add');
     }
   };
 
@@ -212,7 +227,6 @@ export const RoomDesigner: React.FC = () => {
     setItems(items.map(i => selectedItemIds.includes(i.id) ? { ...i, ...updates } : i));
   };
 
-  // --- Grouping & Locking ---
   const handleToggleLock = () => {
     const allLocked = selectedItems.every(i => i.locked);
     updateSelectedItems({ locked: !allLocked });
@@ -229,7 +243,6 @@ export const RoomDesigner: React.FC = () => {
   };
 
   const handleLayer = (direction: 'up' | 'down') => {
-    // Simple layering: move the selected items to end (top) or beginning (bottom) of array
     const selected = items.filter(i => selectedItemIds.includes(i.id));
     const unselected = items.filter(i => !selectedItemIds.includes(i.id));
     
@@ -240,24 +253,17 @@ export const RoomDesigner: React.FC = () => {
     }
   };
 
-  // --- Selection Logic ---
-  const handleItemMouseDown = (e: React.MouseEvent, item: DesignerItem) => {
+  const handleItemMouseDown = (e: React.MouseEvent | React.TouchEvent, item: DesignerItem) => {
     e.stopPropagation();
     
-    // Check if we are clicking a resize handle (passed via class check or propagation stop in handle component)
-    // Actually, we'll handle resize separately. This is for selection/dragging.
-
     let newSelectedIds = [...selectedItemIds];
+    const isShiftKey = 'shiftKey' in e && e.shiftKey;
 
-    if (e.shiftKey) {
-      // Toggle selection
+    if (isShiftKey) {
       if (newSelectedIds.includes(item.id)) {
         newSelectedIds = newSelectedIds.filter(id => id !== item.id);
-        // If item was in a group, deselect the whole group? Or just the item? 
-        // For simplicity, let's just handle the item.
       } else {
         newSelectedIds.push(item.id);
-        // If item is in a group, add all group members
         if (item.groupId) {
           const groupMembers = items.filter(i => i.groupId === item.groupId).map(i => i.id);
           groupMembers.forEach(id => {
@@ -266,7 +272,6 @@ export const RoomDesigner: React.FC = () => {
         }
       }
     } else {
-      // Single selection (or group selection)
       if (!newSelectedIds.includes(item.id)) {
         if (item.groupId) {
           newSelectedIds = items.filter(i => i.groupId === item.groupId).map(i => i.id);
@@ -278,30 +283,28 @@ export const RoomDesigner: React.FC = () => {
 
     setSelectedItemIds(newSelectedIds);
     
-    // Only start dragging if item is not locked
     if (!item.locked) {
       setIsDragging(true);
-      dragStartRef.current = { x: e.clientX, y: e.clientY };
-      initialItemsStateRef.current = JSON.parse(JSON.stringify(items)); // Deep copy state for delta calc
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      dragStartRef.current = { x: clientX, y: clientY };
+      initialItemsStateRef.current = JSON.parse(JSON.stringify(items)); 
     }
   };
 
-  // --- Canvas Interaction ---
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMove = (clientX: number, clientY: number) => {
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
 
     if (isDragging) {
-      const dx = (e.clientX - dragStartRef.current.x) / canvasZoom;
-      const dy = (e.clientY - dragStartRef.current.y) / canvasZoom;
+      const dx = (clientX - dragStartRef.current.x) / canvasZoom;
+      const dy = (clientY - dragStartRef.current.y) / canvasZoom;
       
-      // Convert pixel delta to percentage
       const dxPercent = (dx / rect.width) * 100;
       const dyPercent = (dy / rect.height) * 100;
 
       setItems(prev => {
         return prev.map(item => {
-          // Find initial state for this item
           const initialItem = initialItemsStateRef.current.find(i => i.id === item.id);
           if (initialItem && selectedItemIds.includes(item.id) && !item.locked) {
             return {
@@ -314,16 +317,14 @@ export const RoomDesigner: React.FC = () => {
         });
       });
     }
+  };
 
-    if (isResizing) {
-       // Resize logic is handled by specific handle mouse events, but if we wanted a global drag for resize:
-       // We rely on the ResizeHandle component's internal logic mostly or pass state up.
-       // Here we implement a simple radial resize if resizing active
-       const dx = (e.clientX - dragStartRef.current.x) / canvasZoom;
-       // Simply scale based on drag distance for now
-       // Better: Calculate distance from item center. 
-       // For simplicity in this structure, we handle resize in the Handle component below.
-    }
+  const handleMouseMove = (e: React.MouseEvent) => {
+    handleMove(e.clientX, e.clientY);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    handleMove(e.touches[0].clientX, e.touches[0].clientY);
   };
 
   const handleMouseUp = () => {
@@ -331,55 +332,55 @@ export const RoomDesigner: React.FC = () => {
     setIsResizing(false);
   };
 
-  // --- Sub-Components ---
-  
-  // Resize Handle
   const ResizeHandle = ({ item, cursor, position }: { item: DesignerItem, cursor: string, position: string }) => {
-    const handleMouseDown = (e: React.MouseEvent) => {
+    const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
       e.stopPropagation();
       if (item.locked) return;
       
       setIsResizing(true);
-      
-      const startX = e.clientX;
+      const startX = 'touches' in e ? e.touches[0].clientX : e.clientX;
       const startScale = item.scale;
 
-      const handleMove = (moveEvent: MouseEvent) => {
-        const dx = (moveEvent.clientX - startX) / canvasZoom;
-        // Sensitivity factor
+      const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
+        const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : (moveEvent as MouseEvent).clientX;
+        const dx = (currentX - startX) / canvasZoom;
         const scaleDelta = dx * 0.01; 
         const newScale = Math.max(0.1, Math.min(5, startScale + scaleDelta));
-        
-        // This updates the specific item directly in the main state
         setItems(prev => prev.map(i => i.id === item.id ? { ...i, scale: newScale } : i));
       };
 
       const handleUp = () => {
         window.removeEventListener('mousemove', handleMove);
         window.removeEventListener('mouseup', handleUp);
+        window.removeEventListener('touchmove', handleMove);
+        window.removeEventListener('touchend', handleUp);
         setIsResizing(false);
       };
 
       window.addEventListener('mousemove', handleMove);
       window.addEventListener('mouseup', handleUp);
+      window.addEventListener('touchmove', handleMove);
+      window.addEventListener('touchend', handleUp);
     };
 
     const style: React.CSSProperties = {
       position: 'absolute',
-      width: '12px',
-      height: '12px',
-      backgroundColor: '#6366f1', // Indigo-500
+      width: '16px', // Larger touch target
+      height: '16px',
+      backgroundColor: '#6366f1',
       borderRadius: '50%',
       cursor: cursor,
-      zIndex: 20
+      zIndex: 20,
+      border: '2px solid white',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
     };
 
-    if (position === 'tl') { style.top = '-6px'; style.left = '-6px'; }
-    if (position === 'tr') { style.top = '-6px'; style.right = '-6px'; }
-    if (position === 'bl') { style.bottom = '-6px'; style.left = '-6px'; }
-    if (position === 'br') { style.bottom = '-6px'; style.right = '-6px'; }
+    if (position === 'tl') { style.top = '-8px'; style.left = '-8px'; }
+    if (position === 'tr') { style.top = '-8px'; style.right = '-8px'; }
+    if (position === 'bl') { style.bottom = '-8px'; style.left = '-8px'; }
+    if (position === 'br') { style.bottom = '-8px'; style.right = '-8px'; }
 
-    return <div style={style} onMouseDown={handleMouseDown} />;
+    return <div style={style} onMouseDown={handleStart} onTouchStart={handleStart} />;
   };
 
   const selectedItems = items.filter(i => selectedItemIds.includes(i.id));
@@ -390,13 +391,154 @@ export const RoomDesigner: React.FC = () => {
       if (isDragging || isResizing) handleMouseUp();
     };
     window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('touchend', handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('touchend', handleGlobalMouseUp);
+    };
   }, [isDragging, isResizing]);
 
   const filteredTemplates = activeCategory === 'All' 
     ? TEMPLATES 
     : TEMPLATES.filter(t => t.category === activeCategory);
 
+  // --- Render Functions ---
+
+  const renderPropertiesContent = () => (
+    <div className="space-y-4">
+      {selectedItems.length > 0 ? (
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+             <div className="flex items-center gap-2">
+                <span className="text-2xl">{selectedItems[0].icon}</span>
+                <span className="font-bold text-slate-800">
+                  {isMultiSelect ? `${selectedItems.length} Selected` : selectedItems[0].type}
+                </span>
+             </div>
+             <button onClick={handleDeleteSelected} className="text-red-500 hover:bg-red-50 p-2 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                </svg>
+             </button>
+          </div>
+
+          {/* Quick Actions Row */}
+          <div className="grid grid-cols-4 gap-2">
+            <button 
+              onClick={handleToggleLock}
+              className={`p-2 rounded-lg flex flex-col items-center justify-center gap-1 text-xs font-medium transition-colors ${selectedItems.every(i => i.locked) ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-50 text-slate-600'}`}
+            >
+              {selectedItems.every(i => i.locked) ? 'Unlock' : 'Lock'}
+            </button>
+            <button onClick={() => handleLayer('up')} className="p-2 bg-slate-50 rounded-lg flex flex-col items-center gap-1 text-xs text-slate-600">
+               Forward
+            </button>
+            <button onClick={() => handleLayer('down')} className="p-2 bg-slate-50 rounded-lg flex flex-col items-center gap-1 text-xs text-slate-600">
+               Back
+            </button>
+            {isMultiSelect ? (
+               <button onClick={handleGroup} className="p-2 bg-slate-50 rounded-lg flex flex-col items-center gap-1 text-xs text-slate-600">Group</button>
+            ) : selectedItems.some(i => i.groupId) ? (
+               <button onClick={handleUngroup} className="p-2 bg-slate-50 rounded-lg flex flex-col items-center gap-1 text-xs text-slate-600">Ungroup</button>
+            ) : <div/>}
+          </div>
+
+          {/* Sliders */}
+          <div className="space-y-4 px-1">
+             <div className="space-y-2">
+               <div className="flex justify-between text-sm text-slate-600 font-medium">
+                 <span>Scale</span>
+                 <span>{!isMultiSelect && Math.round(selectedItems[0].scale * 100)}%</span>
+               </div>
+               <input 
+                 type="range" 
+                 min="0.2" max="5" step="0.1"
+                 disabled={selectedItems.some(i => i.locked)}
+                 value={!isMultiSelect ? selectedItems[0].scale : 1}
+                 onChange={(e) => updateSelectedItems({ scale: parseFloat(e.target.value) })}
+                 className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+               />
+             </div>
+
+             <div className="space-y-2">
+               <div className="flex justify-between text-sm text-slate-600 font-medium">
+                 <span>Rotation</span>
+                 <span>{!isMultiSelect && selectedItems[0].rotation}°</span>
+               </div>
+               <input 
+                 type="range" 
+                 min="0" max="360"
+                 disabled={selectedItems.some(i => i.locked)}
+                 value={!isMultiSelect ? selectedItems[0].rotation : 0}
+                 onChange={(e) => updateSelectedItems({ rotation: parseInt(e.target.value) })}
+                 className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+               />
+             </div>
+
+             {/* Color Picker */}
+             <div className="space-y-2">
+                <span className="text-sm text-slate-600 font-medium">Tint / Color</span>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={(!isMultiSelect ? selectedItems[0].color : '#000000') || '#000000'}
+                    onChange={(e) => updateSelectedItems({ color: e.target.value })}
+                    className="w-10 h-10 rounded cursor-pointer border-0 p-0"
+                  />
+                  <button onClick={() => updateSelectedItems({ color: undefined })} className="text-sm text-slate-400 underline hover:text-slate-600">
+                    Reset
+                  </button>
+                </div>
+             </div>
+          </div>
+        </div>
+      ) : (
+        <div className="h-full flex flex-col items-center justify-center text-slate-400 p-8 text-center">
+           <p>Select an item on the canvas to edit properties.</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderAddContent = () => (
+    <div className="h-full overflow-hidden flex flex-col">
+       <h3 className="font-bold text-slate-900 mb-3 px-1 hidden md:block">Library</h3>
+       <div className="flex-grow overflow-y-auto pr-1 pb-20 md:pb-0 custom-scrollbar">
+          <div className="mb-6">
+             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 sticky top-0 bg-white py-2 z-10">Furniture</h4>
+             <div className="grid grid-cols-4 gap-2 md:gap-3">
+               {FURNITURE_ITEMS.map((item) => (
+                 <button
+                   key={item.type}
+                   onClick={() => handleAddItem(item.icon, item.type)}
+                   className="aspect-square flex items-center justify-center text-3xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-xl transition-all active:scale-95"
+                 >
+                   {item.icon}
+                 </button>
+               ))}
+             </div>
+          </div>
+
+          <div>
+             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 sticky top-0 bg-white py-2 z-10">Shapes</h4>
+             <div className="grid grid-cols-4 gap-2 md:gap-3">
+               {SHAPE_ITEMS.map((item) => (
+                 <button
+                   key={item.type}
+                   onClick={() => handleAddItem(item.icon, item.type)}
+                   className="aspect-square flex items-center justify-center text-3xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-xl transition-all active:scale-95 text-slate-700"
+                 >
+                   {item.icon}
+                 </button>
+               ))}
+             </div>
+          </div>
+       </div>
+    </div>
+  );
+
+  // --- Initial Setup View ---
   if (!background) {
     return (
       <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
@@ -405,11 +547,11 @@ export const RoomDesigner: React.FC = () => {
           <p className="text-slate-600">Design your dream space from scratch or use a template.</p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 items-start">
-          <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+          <div className="space-y-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
             <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <span className="bg-indigo-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">1</span>
-              Upload Custom Background
+              <span className="bg-indigo-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm shadow-indigo-200 shadow-lg">1</span>
+              Upload Background
             </h3>
             <ImageUpload onImageSelected={setBackground} />
             <p className="text-sm text-slate-500 text-center px-4">
@@ -417,22 +559,21 @@ export const RoomDesigner: React.FC = () => {
             </p>
           </div>
           
-          <div className="space-y-6">
+          <div className="space-y-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
             <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-               <span className="bg-slate-800 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">2</span>
-               Choose a Template
+               <span className="bg-slate-800 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm shadow-slate-200 shadow-lg">2</span>
+               Choose Template
             </h3>
             
-            {/* Category Filter */}
             <div className="flex flex-wrap gap-2">
               {CATEGORIES.map(cat => (
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all
                     ${activeCategory === cat 
-                      ? 'bg-slate-800 text-white' 
-                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                      ? 'bg-slate-800 text-white shadow-md' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                 >
                   {cat}
@@ -460,354 +601,122 @@ export const RoomDesigner: React.FC = () => {
         </div>
 
         <div className="border-t border-slate-200 pt-8">
-          <div className="flex justify-between items-center mb-6">
+           {/* Saved designs logic same as before... omit for brevity unless requested to change, but including basic structure */}
+           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <h3 className="text-xl font-bold text-slate-900">Saved Designs</h3>
-            <div className="flex gap-3">
-                <input 
-                  type="file" 
-                  ref={importInputRef} 
-                  className="hidden" 
-                  accept=".json" 
-                  onChange={handleImportDesigns}
-                />
-                <button
-                  onClick={() => importInputRef.current?.click()}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                    <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Z" clipRule="evenodd" />
-                    <path fillRule="evenodd" d="M6.194 12.753a.75.75 0 0 0 1.06.053L16.5 4.44v2.81a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.553l-9.056 8.194a.75.75 0 0 0-.053 1.06Z" clipRule="evenodd" />
-                  </svg>
+            <div className="flex gap-3 w-full sm:w-auto">
+                <input type="file" ref={importInputRef} className="hidden" accept=".json" onChange={handleImportDesigns}/>
+                <button onClick={() => importInputRef.current?.click()} className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
                   Import
                 </button>
                 {savedDesigns.length > 0 && (
-                  <button
-                    onClick={handleExportDesigns}
-                    className="px-4 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                      <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
-                      <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
-                    </svg>
+                  <button onClick={handleExportDesigns} className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors flex items-center justify-center gap-2">
                     Export
                   </button>
                 )}
             </div>
           </div>
-
           {savedDesigns.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {savedDesigns.map(design => (
                 <div key={design.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden group">
-                  <div 
-                    className="h-32 bg-slate-100 relative cursor-pointer" 
-                    onClick={() => handleLoadDesign(design)}
-                  >
+                  <div className="h-32 bg-slate-100 relative cursor-pointer" onClick={() => handleLoadDesign(design)}>
                       <img src={design.background} className="w-full h-full object-cover opacity-50" alt="" />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-slate-500 text-xs">{design.items.length} Items</span>
-                      </div>
+                      <div className="absolute inset-0 flex items-center justify-center"><span className="text-slate-500 text-xs">{design.items.length} Items</span></div>
                   </div>
                   <div className="p-3 flex justify-between items-center bg-white">
-                    <div onClick={() => handleLoadDesign(design)} className="cursor-pointer">
-                      <p className="font-bold text-slate-900 text-sm truncate w-24">{design.name}</p>
+                    <div onClick={() => handleLoadDesign(design)} className="cursor-pointer overflow-hidden">
+                      <p className="font-bold text-slate-900 text-sm truncate">{design.name}</p>
                       <p className="text-xs text-slate-500">{design.date}</p>
                     </div>
-                    <button 
-                      onClick={(e) => handleDeleteDesign(e, design.id)}
-                      className="text-slate-400 hover:text-red-500 p-1"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                        <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
-                      </svg>
+                    <button onClick={(e) => handleDeleteDesign(e, design.id)} className="text-slate-400 hover:text-red-500 p-1">
+                       <span className="sr-only">Delete</span>
+                       ×
                     </button>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-             <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-300">
-                <p className="text-slate-500 mb-2">No saved designs yet.</p>
-                <p className="text-sm text-slate-400">Create a new design or import an existing file.</p>
-             </div>
+             <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-300"><p className="text-slate-500 text-sm">No saved designs yet.</p></div>
           )}
         </div>
       </div>
     );
   }
 
+  // --- Main Designer View ---
   return (
-    <div className="h-[calc(100vh-140px)] flex flex-col md:flex-row gap-6 animate-in fade-in duration-500">
+    <div className="relative h-[calc(100vh-140px)] min-h-[500px] flex flex-col md:flex-row gap-6 animate-in fade-in duration-500 overflow-hidden md:overflow-visible">
       
-      {/* Sidebar Controls */}
-      <div className="w-full md:w-72 flex flex-col gap-4 h-full">
-        
-        {/* Properties Panel (Dynamic) */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all duration-300 overflow-y-auto max-h-[50%]">
-           <h3 className="font-bold text-slate-900 mb-3 flex items-center justify-between">
-             Properties
-             {selectedItems.length > 0 && (
-               <button onClick={handleDeleteSelected} className="text-red-500 text-xs hover:bg-red-50 px-2 py-1 rounded">Delete</button>
-             )}
-           </h3>
-           
-           {selectedItems.length > 0 ? (
-             <div className="space-y-4">
-               {isMultiSelect ? (
-                  <div className="p-2 bg-indigo-50 rounded text-sm text-indigo-800 text-center font-medium">
-                    {selectedItems.length} items selected
-                  </div>
-               ) : (
-                  <div className="flex items-center gap-2 mb-2">
-                     <span className="text-2xl">{selectedItems[0].icon}</span>
-                     <span className="font-medium text-slate-700">{selectedItems[0].type}</span>
-                  </div>
-               )}
-
-               {/* Lock Toggle */}
-               <div className="flex items-center justify-between">
-                 <span className="text-xs text-slate-500">Lock Position</span>
-                 <button 
-                   onClick={handleToggleLock}
-                   className={`w-10 h-6 rounded-full p-1 transition-colors ${selectedItems.every(i => i.locked) ? 'bg-indigo-600' : 'bg-slate-300'}`}
-                 >
-                   <div className={`w-4 h-4 bg-white rounded-full transition-transform ${selectedItems.every(i => i.locked) ? 'translate-x-4' : ''}`} />
-                 </button>
-               </div>
-
-               {/* Grouping */}
-               {isMultiSelect && (
-                 <button 
-                   onClick={handleGroup}
-                   className="w-full py-2 bg-slate-100 rounded-lg text-xs font-medium hover:bg-slate-200 text-slate-700"
-                 >
-                   Group Selected
-                 </button>
-               )}
-               {selectedItems.some(i => i.groupId) && (
-                 <button 
-                   onClick={handleUngroup}
-                   className="w-full py-2 bg-slate-100 rounded-lg text-xs font-medium hover:bg-slate-200 text-slate-700"
-                 >
-                   Ungroup Items
-                 </button>
-               )}
-
-                {/* Color Picker */}
-                <div className="space-y-1 pt-2 border-t border-slate-100">
-                   <div className="flex justify-between text-xs text-slate-500">
-                     <span>Color / Tint</span>
-                     {!isMultiSelect && <span className="uppercase text-[10px]">{selectedItems[0].color || 'None'}</span>}
-                   </div>
-                   <div className="flex items-center gap-2">
-                     <div className="relative w-full h-8 rounded-lg overflow-hidden border border-slate-200">
-                       <input
-                         type="color"
-                         value={(!isMultiSelect ? selectedItems[0].color : '#000000') || '#000000'}
-                         onChange={(e) => updateSelectedItems({ color: e.target.value })}
-                         className="absolute -top-[50%] -left-[50%] w-[200%] h-[200%] cursor-pointer p-0 m-0 border-0"
-                       />
-                     </div>
-                     <button
-                       onClick={() => updateSelectedItems({ color: undefined })}
-                       className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
-                       title="Reset Color"
-                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                          <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
-                        </svg>
-                     </button>
-                   </div>
-                </div>
-
-               {/* Common Controls (Scale/Rotate - applies to all selected) */}
-               <div className="space-y-1">
-                 <div className="flex justify-between text-xs text-slate-500">
-                   <span>Scale</span>
-                   {!isMultiSelect && <span>{Math.round(selectedItems[0].scale * 100)}%</span>}
-                 </div>
-                 <input 
-                   type="range" 
-                   min="0.2" 
-                   max="5" 
-                   step="0.1"
-                   disabled={selectedItems.some(i => i.locked)}
-                   value={!isMultiSelect ? selectedItems[0].scale : 1}
-                   onChange={(e) => updateSelectedItems({ scale: parseFloat(e.target.value) })}
-                   className="w-full accent-indigo-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-                 />
-               </div>
-
-               <div className="space-y-1">
-                 <div className="flex justify-between text-xs text-slate-500">
-                   <span>Rotation</span>
-                   {!isMultiSelect && <span>{selectedItems[0].rotation}°</span>}
-                 </div>
-                 <input 
-                   type="range" 
-                   min="0" 
-                   max="360" 
-                   disabled={selectedItems.some(i => i.locked)}
-                   value={!isMultiSelect ? selectedItems[0].rotation : 0}
-                   onChange={(e) => updateSelectedItems({ rotation: parseInt(e.target.value) })}
-                   className="w-full accent-indigo-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-                 />
-               </div>
-
-               <div className="flex gap-2">
-                 <button 
-                   onClick={() => handleLayer('down')}
-                   className="flex-1 py-2 bg-slate-100 rounded-lg text-xs font-medium hover:bg-slate-200 text-slate-700"
-                   title="Send Backward"
-                 >
-                   Send Back
-                 </button>
-                 <button 
-                   onClick={() => handleLayer('up')}
-                   className="flex-1 py-2 bg-slate-100 rounded-lg text-xs font-medium hover:bg-slate-200 text-slate-700"
-                   title="Bring Forward"
-                 >
-                   Bring Front
-                 </button>
-               </div>
-             </div>
-           ) : (
-             <div className="flex flex-col items-center justify-center h-40 text-slate-400">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 mb-2 opacity-50">
-                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672 13.684 16.6m0 0-2.51 2.225.569-9.47 5.227 7.917-3.286-.672ZM12 2.25V4.5m5.834.166-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243-1.59-1.59" />
-               </svg>
-               <p className="text-sm italic">Select an item</p>
-               <p className="text-xs mt-2">Shift+Click to select multiple</p>
-             </div>
-           )}
+      {/* Desktop Sidebar (Left) */}
+      <div className="hidden md:flex w-72 flex-col gap-4 h-full">
+        {/* Properties Panel */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all duration-300 overflow-y-auto max-h-[45%]">
+           <h3 className="font-bold text-slate-900 mb-3">Properties</h3>
+           {renderPropertiesContent()}
         </div>
 
-        {/* Item Library */}
+        {/* Library Panel */}
         <div className="flex-grow bg-white p-4 rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <h3 className="font-bold text-slate-900 mb-3">Add Items</h3>
-          
-          <div className="flex-grow overflow-y-auto pr-1 space-y-4 custom-scrollbar">
-             {/* Furniture Section */}
-             <div>
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Furniture</h4>
-                <div className="grid grid-cols-4 gap-2">
-                  {FURNITURE_ITEMS.map((item) => (
-                    <button
-                      key={item.type}
-                      onClick={() => handleAddItem(item.icon, item.type)}
-                      className="aspect-square flex items-center justify-center text-2xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-lg transition-colors"
-                      title={item.type}
-                    >
-                      {item.icon}
-                    </button>
-                  ))}
-                </div>
-             </div>
-
-             {/* Shapes Section */}
-             <div>
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Shapes & Walls</h4>
-                <div className="grid grid-cols-4 gap-2">
-                  {SHAPE_ITEMS.map((item) => (
-                    <button
-                      key={item.type}
-                      onClick={() => handleAddItem(item.icon, item.type)}
-                      className="aspect-square flex items-center justify-center text-2xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-lg transition-colors text-slate-700"
-                      title={item.type}
-                    >
-                      {item.icon}
-                    </button>
-                  ))}
-                </div>
-             </div>
-          </div>
+          {renderAddContent()}
         </div>
 
-        {/* Global Actions */}
+        {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-2">
-          <button 
-            onClick={handleSaveDesign}
-            className="px-4 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-md shadow-indigo-200"
-          >
-            Save Design
-          </button>
-          <button 
-            onClick={() => setBackground(null)}
-            className="px-4 py-3 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50"
-          >
-            Exit
-          </button>
+          <button onClick={handleSaveDesign} className="px-4 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-md">Save</button>
+          <button onClick={() => setBackground(null)} className="px-4 py-3 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50">Exit</button>
         </div>
       </div>
 
-      {/* Canvas Area */}
-      <div className="flex-grow flex flex-col gap-4 relative">
-         {/* Zoom Controls */}
-         <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 bg-white rounded-lg shadow-md border border-slate-200 p-1">
-            <button 
-              onClick={() => setCanvasZoom(z => Math.min(2, z + 0.1))}
-              className="p-2 hover:bg-slate-100 rounded text-slate-600"
-              title="Zoom In"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
-              </svg>
+      {/* Main Canvas Area */}
+      <div className="absolute inset-0 md:relative md:inset-auto md:flex-grow flex flex-col z-0">
+         {/* Top Mobile Controls */}
+         <div className="md:hidden absolute top-4 left-4 right-4 z-30 flex justify-between">
+            <button onClick={() => setBackground(null)} className="bg-white/90 backdrop-blur text-slate-700 px-4 py-2 rounded-full text-sm font-bold shadow-sm border border-slate-200">
+               Exit
             </button>
-            <div className="text-xs text-center font-medium text-slate-500">{Math.round(canvasZoom * 100)}%</div>
-            <button 
-              onClick={() => setCanvasZoom(z => Math.max(0.5, z - 0.1))}
-              className="p-2 hover:bg-slate-100 rounded text-slate-600"
-              title="Zoom Out"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                <path fillRule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10Z" clipRule="evenodd" />
-              </svg>
-            </button>
-            <button 
-              onClick={() => setCanvasZoom(1)}
-              className="p-2 hover:bg-slate-100 rounded text-slate-600 text-xs font-bold"
-              title="Reset Zoom"
-            >
-              1:1
+            <button onClick={handleSaveDesign} className="bg-indigo-600 text-white px-4 py-2 rounded-full text-sm font-bold shadow-md">
+               Save
             </button>
          </div>
 
-         <div className="flex-grow bg-slate-100 rounded-2xl overflow-hidden relative shadow-inner flex items-center justify-center select-none border border-slate-200 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:20px_20px]">
+         {/* Zoom Controls */}
+         <div className="absolute top-16 right-4 md:top-4 md:right-4 z-20 flex flex-col gap-2 bg-white/90 backdrop-blur rounded-lg shadow-md border border-slate-200 p-1">
+            <button onClick={() => setCanvasZoom(z => Math.min(2, z + 0.1))} className="p-2 hover:bg-slate-100 rounded text-slate-600">
+              <span className="text-xl leading-none">+</span>
+            </button>
+            <div className="text-xs text-center font-medium text-slate-500 select-none">{Math.round(canvasZoom * 100)}%</div>
+            <button onClick={() => setCanvasZoom(z => Math.max(0.5, z - 0.1))} className="p-2 hover:bg-slate-100 rounded text-slate-600">
+              <span className="text-xl leading-none">-</span>
+            </button>
+         </div>
+
+         {/* Canvas */}
+         <div className="flex-grow bg-slate-100 md:rounded-2xl overflow-hidden relative shadow-inner flex items-center justify-center select-none border border-slate-200 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:20px_20px]">
           <div 
             ref={canvasRef}
-            className="relative w-full h-full max-w-5xl max-h-full overflow-hidden"
+            className="relative w-full h-full max-w-5xl max-h-full overflow-hidden touch-none"
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleMouseUp}
             onClick={() => setSelectedItemIds([])}
           >
-            {/* Zoomable Container */}
             <div 
               className="w-full h-full transform-origin-center transition-transform duration-75"
               style={{ transform: `scale(${canvasZoom})` }}
             >
-              {/* Background Layer */}
-              <img 
-                src={background} 
-                alt="Room Background" 
-                className="w-full h-full object-contain pointer-events-none"
-              />
-
-              {/* Items Layer */}
+              <img src={background} alt="Room" className="w-full h-full object-contain pointer-events-none" />
               {items.map((item) => {
                 const isSelected = selectedItemIds.includes(item.id);
-                // Color Logic: 
-                // For Shapes (Simple text chars like ■), color property works.
-                // For Emojis, color doesn't work, so we use drop-shadow to tint/glow.
                 const isShape = SHAPE_ITEMS.some(s => s.type === item.type);
-                
                 return (
                   <div
                     key={item.id}
                     onMouseDown={(e) => handleItemMouseDown(e, item)}
-                    className={`absolute origin-center transition-transform duration-75 group
-                      ${isSelected ? 'z-50' : 'z-10'}
-                      ${item.locked ? 'cursor-not-allowed opacity-90' : 'cursor-move'}
-                    `}
+                    onTouchStart={(e) => handleItemMouseDown(e, item)}
+                    className={`absolute origin-center transition-transform duration-75 ${isSelected ? 'z-50' : 'z-10'} ${item.locked ? 'opacity-90' : ''}`}
                     style={{
                       left: `${item.x}%`,
                       top: `${item.y}%`,
@@ -815,26 +724,13 @@ export const RoomDesigner: React.FC = () => {
                       fontSize: `3rem`,
                       color: item.color,
                       filter: item.color && !isShape ? `drop-shadow(0 0 8px ${item.color})` : 'none',
-                      textShadow: item.color && isShape ? `0 0 2px ${item.color}` : 'none' // Smooth edges for shapes
+                      textShadow: item.color && isShape ? `0 0 2px ${item.color}` : 'none'
                     }}
                   >
-                    <div className={`relative px-1 ${isSelected && !item.locked ? '' : ''}`}>
+                    <div className="relative px-1">
                       {item.icon}
-                      
-                      {/* Selection Box & Controls */}
                       {isSelected && (
                         <div className="absolute inset-0 border-2 border-dashed border-indigo-500 rounded-lg pointer-events-none">
-                          {/* Locked Indicator */}
-                          {item.locked && (
-                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
-                               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-                                 <path fillRule="evenodd" d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7V4.5A3.5 3.5 0 0 0 8 1Zm2 6V4.5a2 2 0 1 0-4 0V7h4Z" clipRule="evenodd" />
-                               </svg>
-                               Locked
-                            </div>
-                          )}
-                          
-                          {/* Resize Handles - Only if not locked and single selection for simplicity */}
                           {!item.locked && !isMultiSelect && (
                             <div className="pointer-events-auto">
                               <ResizeHandle item={item} cursor="nwse-resize" position="tl" />
@@ -850,14 +746,67 @@ export const RoomDesigner: React.FC = () => {
                 );
               })}
             </div>
-
-            {/* Empty State Overlay */}
             {items.length === 0 && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/90 text-slate-800 px-6 py-2 rounded-full text-sm pointer-events-none backdrop-blur-md shadow-lg border border-slate-200 font-medium">
-                Drag and drop furniture from the library
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/90 text-slate-800 px-6 py-2 rounded-full text-sm pointer-events-none backdrop-blur-md shadow-lg border border-slate-200 font-medium whitespace-nowrap">
+                Tap "+" to add furniture
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Mobile Bottom Sheet & Tabs */}
+      <div className="md:hidden">
+        {/* Tab Bar */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-center h-16 z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
+           <button 
+             onClick={() => { setActiveTab('add'); setIsMobileSheetOpen(true); }}
+             className={`flex flex-col items-center gap-1 ${activeTab === 'add' && isMobileSheetOpen ? 'text-indigo-600' : 'text-slate-500'}`}
+           >
+              <div className="text-2xl font-light leading-none">+</div>
+              <span className="text-[10px] font-medium">Add</span>
+           </button>
+           <button 
+             onClick={() => { if(selectedItems.length > 0) { setActiveTab('properties'); setIsMobileSheetOpen(true); } }}
+             className={`flex flex-col items-center gap-1 ${activeTab === 'properties' && isMobileSheetOpen ? 'text-indigo-600' : 'text-slate-400'} ${selectedItems.length === 0 ? 'opacity-50' : ''}`}
+             disabled={selectedItems.length === 0}
+           >
+              <div className="text-lg leading-none mt-1">
+                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path d="m5.433 13.917 1.262-3.155A4 4 0 0 1 7.58 9.42l6.92-6.918a2.121 2.121 0 0 1 3 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 0 1-.65-.65Z" /><path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0 0 10 3H4.75A2.75 2.75 0 0 0 2 5.75v9.5A2.75 2.75 0 0 0 4.75 18h9.5A2.75 2.75 0 0 0 17 15.25V10a.75.75 0 0 0-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5Z" /></svg>
+              </div>
+              <span className="text-[10px] font-medium">Edit</span>
+           </button>
+           <button 
+             onClick={() => setIsMobileSheetOpen(!isMobileSheetOpen)}
+             className="flex flex-col items-center gap-1 text-slate-500"
+           >
+              <div className="text-lg leading-none mt-1">
+                {isMobileSheetOpen ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.832 6.29 12.77a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01.02 1.06z" clipRule="evenodd" /></svg>
+                )}
+              </div>
+              <span className="text-[10px] font-medium">{isMobileSheetOpen ? 'Hide' : 'Show'}</span>
+           </button>
+        </div>
+
+        {/* Sliding Sheet Container */}
+        <div 
+           className={`fixed bottom-16 left-0 right-0 bg-white shadow-[0_-5px_20px_rgba(0,0,0,0.1)] rounded-t-2xl z-40 transition-transform duration-300 ease-in-out border-t border-slate-100
+             ${isMobileSheetOpen ? 'translate-y-0' : 'translate-y-[110%]'}
+           `}
+           style={{ height: '50vh', maxHeight: '400px' }}
+        >
+           {/* Handle */}
+           <div className="w-full flex justify-center pt-3 pb-1 cursor-pointer" onClick={() => setIsMobileSheetOpen(false)}>
+              <div className="w-10 h-1 bg-slate-200 rounded-full"></div>
+           </div>
+
+           <div className="h-full overflow-hidden p-4 pb-12">
+              {activeTab === 'add' && renderAddContent()}
+              {activeTab === 'properties' && renderPropertiesContent()}
+           </div>
         </div>
       </div>
     </div>

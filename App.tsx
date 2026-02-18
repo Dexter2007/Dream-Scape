@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { ImageUpload } from './components/ImageUpload';
@@ -24,10 +24,31 @@ const App: React.FC = () => {
   const [loadingState, setLoadingState] = useState<LoadingState>({ isGenerating: false, statusMessage: '' });
   const [error, setError] = useState<string | null>(null);
 
+  // Download Menu State
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Throttling Ref
+  const isGeneratingRef = useRef(false);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDownloadMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const handleReset = () => {
     setOriginalImage(null);
     setResult(null);
     setError(null);
+    setShowDownloadMenu(false);
   };
 
   const handleGoHome = () => {
@@ -38,6 +59,8 @@ const App: React.FC = () => {
 
   const handleDownload = (format: 'png' | 'jpeg') => {
     if (!result?.generatedImage) return;
+
+    setShowDownloadMenu(false);
 
     const img = new Image();
     img.src = result.generatedImage;
@@ -84,16 +107,29 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    if (!originalImage) return;
+    // Throttling Check: Prevent double execution
+    if (!originalImage || isGeneratingRef.current) return;
+
+    // Lock
+    isGeneratingRef.current = true;
 
     setLoadingState({ isGenerating: true, statusMessage: 'Preparing your design...' });
     setError(null);
     setResult({ originalImage, generatedImage: null, advice: null }); 
 
+    // Define a status updater that updates the UI
+    const updateStatus = (msg: string) => {
+      setLoadingState(prev => ({ ...prev, statusMessage: msg }));
+    };
+
     try {
       // 1. Generate Image First (High Priority)
       setLoadingState({ isGenerating: true, statusMessage: 'Dreaming up your new room (may take 20s+)...' });
-      const generatedImg = await generateRoomRedesign(originalImage, selectedStyle);
+      const generatedImg = await generateRoomRedesign(
+        originalImage, 
+        selectedStyle,
+        updateStatus
+      );
       
       // Update result with image immediately
       setResult(prev => ({ 
@@ -106,9 +142,14 @@ const App: React.FC = () => {
       setLoadingState({ isGenerating: true, statusMessage: 'Consulting interior designers...' });
       
       try {
-        // Wait 5 seconds to significantly reduce chance of Rate Limit
-        await new Promise(r => setTimeout(r, 5000));
-        const advice = await getDesignAdvice(originalImage, selectedStyle);
+        // Wait 10 seconds to significantly reduce chance of Rate Limit
+        await new Promise(r => setTimeout(r, 10000));
+        
+        const advice = await getDesignAdvice(
+          originalImage, 
+          selectedStyle,
+          updateStatus
+        );
         setResult(prev => prev ? { ...prev, advice } : null);
       } catch (adviceErr) {
         console.warn("Advice generation skipped:", adviceErr);
@@ -120,6 +161,10 @@ const App: React.FC = () => {
       setError(err.message || "Something went wrong. Please check your API key and try again.");
     } finally {
       setLoadingState({ isGenerating: false, statusMessage: '' });
+      // Unlock after a brief delay to prevent immediate re-click
+      setTimeout(() => {
+        isGeneratingRef.current = false;
+      }, 1000);
     }
   };
 
@@ -347,26 +392,36 @@ const App: React.FC = () => {
                               </div>
                             </div>
                             
-                            <div className="flex gap-3 w-full sm:w-auto">
+                            <div className="w-full sm:w-auto relative" ref={dropdownRef}>
                               <button 
-                                onClick={() => handleDownload('png')}
-                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-indigo-300 hover:text-indigo-600 transition-all focus:ring-2 focus:ring-indigo-100 shadow-sm"
+                                onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold text-white bg-slate-900 border border-slate-900 rounded-xl hover:bg-indigo-600 hover:border-indigo-600 transition-all shadow-md focus:ring-2 focus:ring-indigo-200"
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                  <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
-                                  <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+                                <span>Download Design</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 transition-transform duration-200 ${showDownloadMenu ? 'rotate-180' : ''}`}>
+                                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                                 </svg>
-                                PNG
                               </button>
-                              <button 
-                                onClick={() => handleDownload('jpeg')}
-                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-slate-900 border border-slate-900 rounded-xl hover:bg-indigo-600 hover:border-indigo-600 transition-all shadow-md focus:ring-2 focus:ring-indigo-200"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                  <path d="M13.75 7h-3v5.296l1.943-2.048a.75.75 0 0 1 1.114 1.004l-3.25 3.5a.75.75 0 0 1-1.114 0l-3.25-3.5a.75.75 0 1 1 1.114-1.004l1.943 2.048V7h1.5V1.75a.75.75 0 0 0-1.5 0V7h-3A2.25 2.25 0 0 0 4 9.25v7.5A2.25 2.25 0 0 0 6.25 19h7.5A2.25 2.25 0 0 0 16 16.75v-7.5A2.25 2.25 0 0 0 13.75 7Z" />
-                                </svg>
-                                JPEG
-                              </button>
+
+                              {showDownloadMenu && (
+                                <div className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-fade-in-up origin-bottom-right">
+                                  <button
+                                    onClick={() => handleDownload('png')}
+                                    className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-between"
+                                  >
+                                    <span>Download PNG</span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">HQ</span>
+                                  </button>
+                                  <div className="h-px bg-slate-100"></div>
+                                  <button
+                                    onClick={() => handleDownload('jpeg')}
+                                    className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-between"
+                                  >
+                                    <span>Download JPEG</span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">Lite</span>
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
