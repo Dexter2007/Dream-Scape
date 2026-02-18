@@ -46,6 +46,20 @@ const getApiKey = (): string | undefined => {
 // Helper for delays
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Fallback images for products when cropping fails or no box is found
+// These are generic high-quality furniture/decor images to ensure the UI always looks good
+const FALLBACK_PRODUCT_IMAGES = [
+  'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=300&q=80', // Sofa
+  'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&w=300&q=80', // Chair
+  'https://images.unsplash.com/photo-1507473888900-52e1adad70ac?auto=format&fit=crop&w=300&q=80', // Lamp
+  'https://images.unsplash.com/photo-1549887534-1541e9326642?auto=format&fit=crop&w=300&q=80', // Decor/Art
+  'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=300&q=80', // Leather Chair
+  'https://images.unsplash.com/photo-1522751512423-1d02da42d22b?auto=format&fit=crop&w=300&q=80', // Plant/Pot
+  'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=300&q=80', // Cushion/Textile
+  'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=300&q=80', // Bright/Pop
+  'https://images.unsplash.com/photo-1532372320572-cda25653a26d?auto=format&fit=crop&w=300&q=80', // Table
+];
+
 // Helper to crop image from bounding box
 async function cropImage(base64Image: string, box: number[]): Promise<string> {
   return new Promise((resolve) => {
@@ -427,6 +441,13 @@ export const generateShopTheLook = async (
              // Crop the image using the bounding box from the optimized image
              // Note: cropImage re-loads the image, we should use optimizedImage for consistency
              imageUrl = await cropImage(optimizedImage, p.box_2d);
+        }
+        
+        // Fallback if cropping failed or no box was provided
+        if (!imageUrl) {
+           // Use a deterministic random fallback based on index to be stable for this session
+           // or just random. Random from pool ensures variety.
+           imageUrl = FALLBACK_PRODUCT_IMAGES[Math.floor(Math.random() * FALLBACK_PRODUCT_IMAGES.length)];
         }
         
         return {
