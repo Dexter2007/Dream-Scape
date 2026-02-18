@@ -1,12 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { AppView } from '../types';
 
 interface HeaderProps {
   currentView: AppView;
   onViewChange: (view: AppView) => void;
+  onHomeClick: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
+export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange, onHomeClick }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -30,6 +32,12 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
     setIsMobileMenuOpen(false);
   };
 
+  const handleLogoClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    onHomeClick();
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <header 
       className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 ease-in-out border-b
@@ -40,9 +48,10 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <div 
+          <a 
+            href="/"
             className="flex items-center gap-3 cursor-pointer group relative z-50"
-            onClick={() => handleNavClick('redesign')}
+            onClick={handleLogoClick}
           >
             <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-serif font-bold text-xl shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-300">
               D
@@ -50,14 +59,14 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
             <span className={`text-2xl font-bold font-serif tracking-tight transition-colors duration-300 ${scrolled || isMobileMenuOpen ? 'text-slate-900' : 'text-slate-900'}`}>
               DreamSpace
             </span>
-          </div>
+          </a>
           
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-1 bg-slate-100/80 p-1.5 rounded-full border border-slate-200/50 backdrop-blur-sm">
             {navItems.map((item) => (
               <button
                 key={item.id}
-                onClick={() => onViewChange(item.id)}
+                onClick={() => handleNavClick(item.id)}
                 className={`px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 ease-in-out
                   ${currentView === item.id 
                     ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' 

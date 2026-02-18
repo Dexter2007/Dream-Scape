@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -27,6 +28,12 @@ const App: React.FC = () => {
     setOriginalImage(null);
     setResult(null);
     setError(null);
+  };
+
+  const handleGoHome = () => {
+    setCurrentView('redesign');
+    handleReset();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDownload = (format: 'png' | 'jpeg') => {
@@ -395,7 +402,7 @@ const App: React.FC = () => {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#fafaf9]/80 pointer-events-none"></div>
       </div>
 
-      <Header currentView={currentView} onViewChange={setCurrentView} />
+      <Header currentView={currentView} onViewChange={setCurrentView} onHomeClick={handleGoHome} />
       <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-8 space-y-8 relative z-0">
         {renderContent()}
       </main>
