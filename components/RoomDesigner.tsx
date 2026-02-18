@@ -673,8 +673,9 @@ export const RoomDesigner: React.FC = () => {
   }
 
   // --- Main Designer View ---
+  // Use h-[100dvh] (dynamic viewport height) for mobile to prevent address bar jumps
   return (
-    <div className="relative h-[calc(100vh-140px)] min-h-[500px] flex flex-col md:flex-row gap-6 animate-fade-in-up overflow-hidden md:overflow-visible">
+    <div className="relative h-[100dvh] md:h-[calc(100vh-140px)] min-h-[500px] flex flex-col md:flex-row gap-6 animate-fade-in-up overflow-hidden md:overflow-visible -mt-4 md:mt-0">
       
       {/* Desktop Sidebar (Left) */}
       <div className="hidden md:flex w-72 flex-col gap-4 h-full">

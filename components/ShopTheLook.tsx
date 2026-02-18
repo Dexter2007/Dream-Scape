@@ -113,9 +113,9 @@ const ProductCard: React.FC<{ product: ProductItem }> = ({ product }) => {
   const buyUrl = `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(product.query || product.name)}`;
 
   return (
-    <div className="flex items-center gap-5 p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-300 group">
+    <div className="flex items-center gap-3 md:gap-5 p-3 md:p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-300 group">
       {/* Product Image Square */}
-      <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 relative bg-slate-100 dark:bg-slate-700 shadow-inner">
+      <div className="w-16 h-16 md:w-20 md:h-20 rounded-xl overflow-hidden flex-shrink-0 relative bg-slate-100 dark:bg-slate-700 shadow-inner">
          <div 
           className={`absolute inset-0 flex items-center justify-center text-white font-bold text-xl uppercase ${imageLoaded ? 'opacity-0' : 'opacity-100'}`}
           style={{ backgroundColor: bgColor }}
@@ -136,7 +136,7 @@ const ProductCard: React.FC<{ product: ProductItem }> = ({ product }) => {
       {/* Product Info */}
       <div className="flex-grow min-w-0 flex flex-col justify-center">
         <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Product</div>
-        <h5 className="font-serif font-bold text-lg text-slate-900 dark:text-white leading-tight truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+        <h5 className="font-serif font-bold text-base md:text-lg text-slate-900 dark:text-white leading-tight truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
           {product.name}
         </h5>
         <div className="text-indigo-600 dark:text-indigo-400 font-bold text-base mt-0.5">
@@ -178,10 +178,10 @@ const CollectionCard: React.FC<{ collection: LookCollection }> = ({ collection }
   const remainingCount = Math.max(0, collection.products.length - 4);
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-[2rem] overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-500 border border-slate-200 dark:border-slate-700 flex flex-col lg:flex-row h-full min-h-[500px]">
+    <div className="bg-white dark:bg-slate-800 rounded-[2rem] overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-500 border border-slate-200 dark:border-slate-700 flex flex-col lg:flex-row h-full lg:min-h-[500px]">
       
       {/* Left: Hero Image */}
-      <div className="lg:w-[60%] relative group overflow-hidden min-h-[300px]">
+      <div className="lg:w-[60%] relative group overflow-hidden h-[300px] lg:h-auto">
         <img 
           src={collection.image} 
           alt={collection.title} 
@@ -191,11 +191,11 @@ const CollectionCard: React.FC<{ collection: LookCollection }> = ({ collection }
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-90 transition-opacity"></div>
         
         {/* Content Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-8 lg:p-10 flex flex-col items-start gap-3">
+        <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8 lg:p-10 flex flex-col items-start gap-2 md:gap-3">
            <span className="bg-indigo-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest shadow-lg">
              {collection.style}
            </span>
-           <h3 className="text-4xl lg:text-5xl font-serif font-bold text-white leading-tight drop-shadow-sm">
+           <h3 className="text-3xl md:text-4xl lg:text-5xl font-serif font-bold text-white leading-tight drop-shadow-sm">
              {collection.title}
            </h3>
            <p className="text-slate-200 text-sm lg:text-base max-w-lg font-light leading-relaxed">
@@ -206,12 +206,12 @@ const CollectionCard: React.FC<{ collection: LookCollection }> = ({ collection }
 
       {/* Right: Product List */}
       <div className="lg:w-[40%] bg-white dark:bg-slate-800 flex flex-col border-l border-slate-100 dark:border-slate-700">
-         <div className="p-8 pb-4 flex justify-between items-baseline border-b border-slate-50 dark:border-slate-700/50">
-            <h4 className="font-serif font-bold text-2xl text-slate-900 dark:text-white">Featured Items</h4>
+         <div className="p-6 md:p-8 pb-4 flex justify-between items-baseline border-b border-slate-50 dark:border-slate-700/50">
+            <h4 className="font-serif font-bold text-xl md:text-2xl text-slate-900 dark:text-white">Featured Items</h4>
             <span className="font-serif italic text-slate-400 dark:text-slate-500 text-sm">{collection.products.length} items</span>
          </div>
 
-         <div className="flex-grow p-6 space-y-4 overflow-y-auto max-h-[600px] custom-scrollbar bg-slate-50/50 dark:bg-slate-900/20">
+         <div className="flex-grow p-4 md:p-6 space-y-4 overflow-y-auto max-h-[400px] lg:max-h-[600px] custom-scrollbar bg-slate-50/50 dark:bg-slate-900/20">
             {displayedProducts.map(product => (
                <ProductCard key={product.id} product={product} />
             ))}
@@ -359,7 +359,7 @@ export const ShopTheLook: React.FC = () => {
 
   return (
     <>
-      <div className="space-y-20 animate-fade-in-up pb-24">
+      <div className="space-y-12 md:space-y-20 animate-fade-in-up pb-24">
         {/* Hidden File Input */}
         <input 
           type="file"
@@ -370,28 +370,28 @@ export const ShopTheLook: React.FC = () => {
         />
 
         {/* Hero / Upload Section */}
-        <div className="text-center max-w-4xl mx-auto space-y-12 pt-8">
-          <div className="space-y-6">
+        <div className="text-center max-w-4xl mx-auto space-y-8 md:space-y-12 pt-4 md:pt-8">
+          <div className="space-y-4 md:space-y-6">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 text-xs font-bold uppercase tracking-widest border border-indigo-100 dark:border-indigo-800">
               <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
               AI Visual Search
             </div>
-            <h2 className="text-5xl md:text-7xl font-bold font-serif text-slate-900 dark:text-white tracking-tight">
+            <h2 className="text-4xl md:text-5xl lg:text-7xl font-bold font-serif text-slate-900 dark:text-white tracking-tight">
               Shop the <span className="italic text-indigo-600 dark:text-indigo-400">Look</span>
             </h2>
-            <p className="text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto font-light leading-relaxed">
+            <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto font-light leading-relaxed px-4">
               Upload any room photo. Our AI breaks down the style and finds the exact furniture pieces for you to buy.
             </p>
           </div>
 
           {!previewImage && !generatedLook && (
-             <div className="transform hover:scale-[1.01] transition-transform duration-500">
+             <div className="transform hover:scale-[1.01] transition-transform duration-500 px-4">
                <ImageUpload onImageSelected={handleImageSelect} />
              </div>
           )}
 
           {analyzing && previewImage && (
-            <div className="relative h-96 rounded-[2rem] overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl mx-auto max-w-3xl">
+            <div className="relative h-64 md:h-96 rounded-[2rem] overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl mx-4 md:mx-auto max-w-3xl">
                <img src={previewImage} className="w-full h-full object-cover blur-md opacity-40 scale-110" alt="Scanning" />
                <div className="absolute inset-0 flex items-center justify-center">
                   <LoadingOverlay status="Analyzing aesthetics..." />
@@ -400,7 +400,7 @@ export const ShopTheLook: React.FC = () => {
           )}
 
           {error && (
-            <div className="p-6 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-300 rounded-2xl border border-red-100 dark:border-red-900/50 flex flex-col items-center gap-2">
+            <div className="p-6 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-300 rounded-2xl border border-red-100 dark:border-red-900/50 flex flex-col items-center gap-2 mx-4">
               <span className="font-bold">Analysis Failed</span>
               <span className="text-sm opacity-90">{error}</span>
               <button onClick={() => setPreviewImage(null)} className="mt-2 text-xs uppercase tracking-wider font-bold underline">Try Again</button>
@@ -410,11 +410,11 @@ export const ShopTheLook: React.FC = () => {
 
         {/* Generated Result Section (Top Detail View) */}
         {generatedLook && (
-          <div ref={resultRef} className="animate-fade-in-up scroll-mt-32 max-w-6xl mx-auto">
-             <div className="flex justify-between items-end mb-8 px-4">
+          <div ref={resultRef} className="animate-fade-in-up scroll-mt-32 max-w-6xl mx-auto px-4 lg:px-0">
+             <div className="flex justify-between items-end mb-8">
                 <div>
                   <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Analysis Result</p>
-                  <h3 className="text-3xl font-serif font-bold text-slate-900 dark:text-white">
+                  <h3 className="text-2xl md:text-3xl font-serif font-bold text-slate-900 dark:text-white">
                      Your Custom Look
                   </h3>
                 </div>
@@ -423,7 +423,8 @@ export const ShopTheLook: React.FC = () => {
                   className="text-sm font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors flex items-center gap-2"
                 >
                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path d="M17 10a.75.75 0 0 1-.75.75H5.612l4.158 3.96a.75.75 0 1 1-1.04 1.08l-5.5-5.25a.75.75 0 0 1 0-1.08l5.5-5.25a.75.75 0 1 1 1.04 1.08L5.612 9.25H16.25A.75.75 0 0 1 17 10Z" /></svg>
-                   Scan Another
+                   <span className="hidden sm:inline">Scan Another</span>
+                   <span className="sm:hidden">Scan</span>
                 </button>
              </div>
              
@@ -432,18 +433,18 @@ export const ShopTheLook: React.FC = () => {
         )}
 
         {/* Collections Grid Header */}
-        <div className="flex flex-col items-center justify-center py-12 space-y-4">
+        <div className="flex flex-col items-center justify-center py-8 md:py-12 space-y-4 px-4">
            <div className="w-px h-16 bg-gradient-to-b from-transparent via-slate-300 to-slate-300 dark:via-slate-600 dark:to-slate-600"></div>
-           <h2 className="text-4xl md:text-5xl font-bold font-serif text-slate-900 dark:text-white text-center">
+           <h2 className="text-3xl md:text-5xl font-bold font-serif text-slate-900 dark:text-white text-center">
               Trending Collections
            </h2>
-           <p className="text-slate-500 dark:text-slate-400 max-w-xl text-center">
+           <p className="text-slate-500 dark:text-slate-400 max-w-xl text-center text-sm md:text-base">
               Hand-picked interior designs with shoppable furniture lists.
            </p>
         </div>
 
         {/* Editorial List (Single Column Wide Cards) */}
-        <div className="flex flex-col gap-16 max-w-6xl mx-auto">
+        <div className="flex flex-col gap-8 md:gap-16 max-w-6xl mx-auto px-4 lg:px-0">
           {displayedCollections.map((collection, index) => (
              <div key={`${collection.id}-${index}`} className="animate-fade-in-up">
                 <CollectionCard collection={collection} />

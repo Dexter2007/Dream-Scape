@@ -299,16 +299,16 @@ const App: React.FC = () => {
             {/* Hero / Intro */}
             {!originalImage && (
               <div className="relative animate-fade-in-up">
-                <div className="text-center max-w-5xl mx-auto py-24 md:py-32 px-4 relative z-10">
+                <div className="text-center max-w-5xl mx-auto py-16 md:py-32 px-4 relative z-10">
                   
-                  <h1 className="text-6xl md:text-8xl font-bold tracking-tight text-slate-900 dark:text-white mb-8 font-serif leading-tight">
+                  <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight text-slate-900 dark:text-white mb-6 md:mb-8 font-serif leading-tight">
                     Redesign your <br/>
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 drop-shadow-sm">
                       sanctuary.
                     </span>
                   </h1>
                   
-                  <p className="text-xl md:text-2xl text-slate-600 dark:text-slate-300 mb-12 font-light leading-relaxed max-w-2xl mx-auto">
+                  <p className="text-lg md:text-xl lg:text-2xl text-slate-600 dark:text-slate-300 mb-8 md:mb-12 font-light leading-relaxed max-w-2xl mx-auto px-2">
                     Experience the future of interior design. Upload a photo, curate your style, and watch your space transform instantly.
                   </p>
 
@@ -317,39 +317,39 @@ const App: React.FC = () => {
                   </div>
 
                   {/* Feature Grid */}
-                  <div className="grid md:grid-cols-3 gap-8 mt-24 text-left">
-                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
+                  <div className="grid md:grid-cols-3 gap-6 md:gap-8 mt-16 md:mt-24 text-left">
+                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
                       <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
                         🎨
                       </div>
                       <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">15+ Design Styles</h3>
-                      <p className="text-slate-600 dark:text-slate-400">From Japandi to Cyberpunk, explore a diverse range of aesthetic transformations.</p>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base">From Japandi to Cyberpunk, explore a diverse range of aesthetic transformations.</p>
                     </div>
-                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
+                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
                        <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
                         💡
                       </div>
                       <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Expert Advice</h3>
-                      <p className="text-slate-600 dark:text-slate-400">Get actionable critiques, color palettes, and furniture suggestions.</p>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base">Get actionable critiques, color palettes, and furniture suggestions.</p>
                     </div>
-                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
+                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
                        <div className="w-12 h-12 bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
                         ⚡
                       </div>
                       <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Instant Rendering</h3>
-                      <p className="text-slate-600 dark:text-slate-400">Visualize your new room in seconds with state-of-the-art Generative AI.</p>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base">Visualize your new room in seconds with state-of-the-art Generative AI.</p>
                     </div>
                   </div>
 
                   {/* Style Marquee */}
-                  <div className="mt-24">
-                     <div className="flex justify-between items-end mb-8">
-                        <h2 className="text-3xl font-bold font-serif text-slate-900 dark:text-white">Trending Styles</h2>
-                        <button onClick={() => setCurrentView('quiz')} className="text-indigo-600 dark:text-indigo-400 font-medium hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center gap-1 group">
+                  <div className="mt-20 md:mt-24">
+                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 md:mb-8 gap-4">
+                        <h2 className="text-2xl md:text-3xl font-bold font-serif text-slate-900 dark:text-white">Trending Styles</h2>
+                        <button onClick={() => setCurrentView('quiz')} className="text-indigo-600 dark:text-indigo-400 font-medium hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center gap-1 group text-sm md:text-base">
                            Take the Style Quiz <span className="text-lg group-hover:translate-x-1 transition-transform">→</span>
                         </button>
                      </div>
-                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                         {ROOM_STYLES.slice(0, 4).map(style => (
                            <div 
                               key={style.value} 
@@ -367,10 +367,10 @@ const App: React.FC = () => {
                               <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-500"></div>
 
                               {/* Content Container - Centered and Elegant */}
-                              <div className="absolute inset-0 flex flex-col justify-end p-6 items-center text-center">
+                              <div className="absolute inset-0 flex flex-col justify-end p-4 md:p-6 items-center text-center">
                                 {/* Title Slide Up */}
                                 <div className="transform transition-transform duration-500 group-hover:-translate-y-2">
-                                  <p className="font-serif text-2xl text-white tracking-widest font-medium drop-shadow-md">
+                                  <p className="font-serif text-lg md:text-2xl text-white tracking-widest font-medium drop-shadow-md">
                                     {style.label}
                                   </p>
                                 </div>
@@ -379,7 +379,7 @@ const App: React.FC = () => {
                                 <div className="max-h-0 overflow-hidden group-hover:max-h-24 transition-[max-height] duration-700 ease-[cubic-bezier(0.19,1,0.22,1)]">
                                    <div className="pt-3 pb-1">
                                      <div className="w-8 h-px bg-white/40 mx-auto mb-3"></div>
-                                     <p className="text-xs text-slate-100 font-sans font-light tracking-wide leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
+                                     <p className="text-[10px] md:text-xs text-slate-100 font-sans font-light tracking-wide leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
                                        {style.description}
                                      </p>
                                    </div>
@@ -396,7 +396,7 @@ const App: React.FC = () => {
 
             {/* Active Redesign View */}
             {originalImage && (
-              <div className="space-y-8 animate-fade-in-up pt-12">
+              <div className="space-y-8 animate-fade-in-up pt-6 md:pt-12">
                 {/* Hidden Input for changing photo */}
                 <input 
                   type="file"
@@ -407,10 +407,10 @@ const App: React.FC = () => {
                 />
 
                 {/* Control Bar */}
-                <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 shadow-xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-700/50">
+                <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-3xl p-4 md:p-6 shadow-xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-700/50">
                   <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-20 h-20 rounded-2xl overflow-hidden relative group cursor-pointer shadow-md ring-4 ring-white dark:ring-slate-700" onClick={() => fileInputRef.current?.click()}>
+                    <div className="flex items-center gap-4 w-full md:w-auto">
+                      <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden relative group cursor-pointer shadow-md ring-4 ring-white dark:ring-slate-700 flex-shrink-0" onClick={() => fileInputRef.current?.click()}>
                          <img src={originalImage} alt="Original" className="w-full h-full object-cover" />
                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6 text-white">
@@ -418,9 +418,9 @@ const App: React.FC = () => {
                             </svg>
                          </div>
                       </div>
-                      <div>
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white font-serif">Your Room</h2>
-                        <button onClick={() => fileInputRef.current?.click()} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 font-medium hover:underline">
+                      <div className="min-w-0">
+                        <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white font-serif truncate">Your Room</h2>
+                        <button onClick={() => fileInputRef.current?.click()} className="text-xs md:text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 font-medium hover:underline">
                           Select different photo
                         </button>
                       </div>
@@ -430,7 +430,7 @@ const App: React.FC = () => {
                       <button
                         onClick={handleGenerate}
                         disabled={loadingState.isGenerating}
-                        className="w-full md:w-auto px-10 py-4 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-medium rounded-full transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center gap-2"
+                        className="w-full md:w-auto px-6 md:px-10 py-3 md:py-4 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-medium rounded-full transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center gap-2 text-sm md:text-base"
                       >
                         {loadingState.isGenerating ? 'Designing...' : 'Generate New Design'}
                         {!loadingState.isGenerating && (
@@ -443,18 +443,18 @@ const App: React.FC = () => {
                   </div>
 
                   {/* Style Selector inside the control panel */}
-                  <div className="mt-8 pt-8 border-t border-slate-100/50 dark:border-slate-700/50">
+                  <div className="mt-6 md:mt-8 pt-6 md:pt-8 border-t border-slate-100/50 dark:border-slate-700/50">
                      {/* Show Active Custom Style if it's not in the predefined list */}
                      {!ROOM_STYLES.some(s => s.value === selectedStyle) && (
                         <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl flex items-center gap-3 animate-fade-in-up">
-                           <div className="bg-indigo-600 text-white p-2 rounded-lg">
+                           <div className="bg-indigo-600 text-white p-2 rounded-lg flex-shrink-0">
                               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                                  <path d="M10 2a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 2ZM10 15a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 15ZM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 1.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM3.5 10a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3.5 10ZM14.25 10a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75ZM5.404 5.404a.75.75 0 0 1 1.06 0l1.06 1.06a.75.75 0 0 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06ZM12.47 12.47a.75.75 0 0 1 1.06 0l1.06 1.06a.75.75 0 1 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06ZM5.404 14.596a.75.75 0 0 1 0 1.06l-1.06 1.06a.75.75 0 1 1-1.06-1.06l1.06-1.06a.75.75 0 0 1 1.06 0ZM12.47 7.53a.75.75 0 0 1 0-1.06l1.06-1.06a.75.75 0 1 1 1.06 1.06l-1.06 1.06a.75.75 0 0 1-1.06 0Z" />
                               </svg>
                            </div>
-                           <div>
+                           <div className="min-w-0">
                               <p className="text-xs text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-wider">Active Custom Style</p>
-                              <p className="font-serif text-xl font-bold text-slate-900 dark:text-white">{selectedStyle}</p>
+                              <p className="font-serif text-xl font-bold text-slate-900 dark:text-white truncate">{selectedStyle}</p>
                            </div>
                         </div>
                      )}
@@ -566,7 +566,7 @@ const App: React.FC = () => {
                      </div>
 
                      {/* Advice Area */}
-                     <div className="lg:col-span-1 h-full min-h-[500px]">
+                     <div className="lg:col-span-1 h-full min-h-[400px] lg:min-h-[500px]">
                         {loadingState.isGenerating && !result?.generatedImage ? (
                           <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/50 dark:border-slate-700 p-8 h-full flex flex-col gap-8 animate-pulse">
                              <div className="h-8 bg-slate-100 dark:bg-slate-700 rounded-lg w-1/2"></div>
