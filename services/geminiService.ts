@@ -34,6 +34,29 @@ const getApiKey = (): string | undefined => {
   return undefined;
 };
 
+// Helper for delays
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Retry wrapper for API calls
+async function retryOperation<T>(operation: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
+  try {
+    return await operation();
+  } catch (error: any) {
+    // Check for Rate Limit (429) or Service Unavailable (503)
+    const isRateLimit = error.status === 429 || (error.message && error.message.includes('429'));
+    const isOverloaded = error.status === 503;
+
+    if ((isRateLimit || isOverloaded) && retries > 0) {
+      console.warn(`Rate limit hit. Retrying in ${delay}ms... (${retries} attempts left)`);
+      await wait(delay);
+      // Exponential backoff: double the delay for the next retry
+      return retryOperation(operation, retries - 1, delay * 2);
+    }
+
+    throw error;
+  }
+}
+
 export const generateRoomRedesign = async (
   base64Image: string,
   style: string
@@ -61,47 +84,43 @@ export const generateRoomRedesign = async (
   `;
 
   try {
-    const mimeType = getMimeType(base64Image);
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: cleanBase64(base64Image)
-            }
-          },
-          { text: prompt }
-        ]
-      }
-    });
+    return await retryOperation(async () => {
+      const mimeType = getMimeType(base64Image);
+      const response = await ai.models.generateContent({
+        model: modelId,
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: cleanBase64(base64Image)
+              }
+            },
+            { text: prompt }
+          ]
+        }
+      });
 
-    if (response.candidates) {
-      for (const candidate of response.candidates) {
-        for (const part of candidate.content.parts) {
-          if (part.inlineData && part.inlineData.data) {
-            return `data:image/png;base64,${part.inlineData.data}`;
+      if (response.candidates) {
+        for (const candidate of response.candidates) {
+          for (const part of candidate.content.parts) {
+            if (part.inlineData && part.inlineData.data) {
+              return `data:image/png;base64,${part.inlineData.data}`;
+            }
           }
         }
       }
-    }
-    
-    throw new Error("No image generated in response.");
+      throw new Error("No image generated in response.");
+    });
   } catch (error: any) {
     console.error("Redesign error:", error);
     
-    // Handle specific API errors
     if (error.status === 403 || (error.message && error.message.includes('leaked'))) {
       throw new Error("Your API Key has been revoked by Google because it was exposed. Please generate a new key at aistudio.google.com.");
     }
     
     if (error.status === 429) {
-       throw new Error("Too many requests! Please wait 30 seconds and try again.");
-    }
-    
-    if (error.status === 503) {
-       throw new Error("Google AI service is currently overloaded. Please try again in a moment.");
+       throw new Error("System is busy (Rate Limit). Please wait a minute and try again.");
     }
     
     throw error;
@@ -124,59 +143,61 @@ export const getDesignAdvice = async (
   `;
 
   try {
-    const mimeType = getMimeType(base64Image);
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: cleanBase64(base64Image)
-            }
-          },
-          { text: prompt }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            critique: {
-              type: Type.STRING,
-              description: "A short critique of the current room state.",
+    return await retryOperation(async () => {
+      const mimeType = getMimeType(base64Image);
+      const response = await ai.models.generateContent({
+        model: modelId,
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: cleanBase64(base64Image)
+              }
             },
-            suggestions: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "List of specific actionable steps to achieve the look.",
-            },
-            colorPalette: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  hex: { type: Type.STRING, description: "Hex color code e.g. #FFFFFF" },
-                },
-                required: ["name", "hex"]
+            { text: prompt }
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              critique: {
+                type: Type.STRING,
+                description: "A short critique of the current room state.",
               },
-              description: "A recommended color palette of 5 colors.",
+              suggestions: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: "List of specific actionable steps to achieve the look.",
+              },
+              colorPalette: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    hex: { type: Type.STRING, description: "Hex color code e.g. #FFFFFF" },
+                  },
+                  required: ["name", "hex"]
+                },
+                description: "A recommended color palette of 5 colors.",
+              },
+              furnitureRecommendations: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: "List of specific furniture or decor items to buy.",
+              }
             },
-            furnitureRecommendations: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "List of specific furniture or decor items to buy.",
-            }
-          },
-          required: ["critique", "suggestions", "colorPalette", "furnitureRecommendations"]
+            required: ["critique", "suggestions", "colorPalette", "furnitureRecommendations"]
+          }
         }
-      }
-    });
+      });
 
-    const jsonText = response.text || "{}";
-    return JSON.parse(jsonText) as DesignAdvice;
+      const jsonText = response.text || "{}";
+      return JSON.parse(jsonText) as DesignAdvice;
+    });
   } catch (error: any) {
     console.error("Advice error:", error);
     
@@ -185,7 +206,7 @@ export const getDesignAdvice = async (
     }
 
     if (error.status === 429) {
-       throw new Error("Too many requests! Please wait 30 seconds and try again.");
+       throw new Error("System is busy (Rate Limit). Please wait a minute and try again.");
     }
     
     throw error;

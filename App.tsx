@@ -106,8 +106,8 @@ const App: React.FC = () => {
       setLoadingState({ isGenerating: true, statusMessage: 'Consulting interior designers...' });
       
       try {
-        // Small delay to be gentle on rate limits
-        await new Promise(r => setTimeout(r, 500));
+        // Wait 2 seconds to be safe with Free Tier rate limits
+        await new Promise(r => setTimeout(r, 2000));
         const advice = await getDesignAdvice(originalImage, selectedStyle);
         setResult(prev => prev ? { ...prev, advice } : null);
       } catch (adviceErr) {
