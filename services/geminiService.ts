@@ -90,8 +90,8 @@ async function cropImage(base64Image: string, box: number[]): Promise<string> {
 async function retryOperation<T>(
   operation: () => Promise<T>, 
   onStatusUpdate?: (msg: string) => void,
-  retries = 3, 
-  initialDelay = 12000
+  retries = 5, 
+  initialDelay = 2000
 ): Promise<T> {
   let delay = initialDelay;
   
@@ -99,24 +99,33 @@ async function retryOperation<T>(
     try {
       return await operation();
     } catch (error: any) {
-      // Check for Rate Limit (429) or Service Unavailable (503)
-      const isRateLimit = error.status === 429 || (error.message && error.message.includes('429'));
-      const isOverloaded = error.status === 503;
+      // Check for Rate Limit (429), Service Unavailable (503), or Resource Exhausted
+      const errorMessage = error.message || '';
+      const isRateLimit = error.status === 429 || 
+                          errorMessage.includes('429') || 
+                          errorMessage.includes('Resource has been exhausted') ||
+                          errorMessage.includes('quota');
+                          
+      const isOverloaded = error.status === 503 || errorMessage.includes('503') || errorMessage.includes('Overloaded');
 
       if (isRateLimit || isOverloaded) {
         // If this is the last retry, throw the error
         if (i === retries - 1) throw error;
 
-        const waitSeconds = delay / 1000;
+        // Exponential backoff with some jitter to prevent thundering herd
+        const jitter = Math.random() * 1000;
+        const currentDelay = delay + jitter;
+        const waitSeconds = Math.ceil(currentDelay / 1000);
+        
         console.warn(`Rate limit hit (Attempt ${i + 1}/${retries}). Waiting ${waitSeconds}s...`);
         
         if (onStatusUpdate) {
-          onStatusUpdate(`High traffic (429). Retrying in ${waitSeconds}s...`);
+          onStatusUpdate(`High traffic (${isRateLimit ? 'Rate Limit' : 'Server Busy'}). Retrying in ${waitSeconds}s...`);
         }
 
-        await wait(delay);
+        await wait(currentDelay);
         
-        // Exponential backoff
+        // Increase delay for next attempt
         delay *= 2; 
         continue;
       }
@@ -187,16 +196,18 @@ export const generateRoomRedesign = async (
   } catch (error: any) {
     console.error("Redesign error:", error);
     
-    if (error.status === 403 || (error.message && error.message.includes('leaked'))) {
-      throw new Error("Your API Key has been revoked by Google. Please generate a new key in AI Studio.");
+    const msg = error.message || '';
+
+    if (error.status === 403 || msg.includes('leaked') || msg.includes('key')) {
+      throw new Error("Your API Key has been revoked or is invalid. Please check your .env file.");
     }
 
-    if (error.status === 400 && error.message.includes('API key')) {
+    if (error.status === 400 && msg.includes('API key')) {
       throw new Error("Invalid API Key. Please check your .env file.");
     }
     
-    if (error.status === 429) {
-       throw new Error("System is busy (Rate Limit). We retried several times, but the server is still busy. Please wait 1 minute.");
+    if (error.status === 429 || msg.includes('429') || msg.includes('exhausted')) {
+       throw new Error("System is currently at maximum capacity (Rate Limit). Please wait 1-2 minutes and try again.");
     }
     
     throw error;
@@ -274,7 +285,7 @@ export const getDesignAdvice = async (
 
       const jsonText = response.text || "{}";
       return JSON.parse(jsonText) as DesignAdvice;
-    }, onStatusUpdate);
+    }, onStatusUpdate, 3, 5000); // Specific settings for advice (fewer retries, 5s delay)
   } catch (error: any) {
     console.error("Advice error:", error);
     // Silent fail for advice is handled in UI, but we throw here to let UI know
@@ -379,7 +390,7 @@ export const generateShopTheLook = async (
         image: base64Image,
         products: productsWithImages
       } as LookCollection;
-    }, onStatusUpdate);
+    }, onStatusUpdate, 3, 5000);
   } catch (error: any) {
     console.error("Shop The Look error:", error);
     throw error;
