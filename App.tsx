@@ -53,16 +53,39 @@ const App: React.FC = () => {
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
+  // Back to Top State
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // Scroll to Top Observer
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // AI Redesign State
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<string>(RoomStyle.Modern);
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [loadingState, setLoadingState] = useState<LoadingState>({ isGenerating: false, statusMessage: '' });
+  const [isGeneratingAdvice, setIsGeneratingAdvice] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Download Menu State
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Scroll Ref for Results
+  const resultsRef = useRef<HTMLDivElement>(null);
+  
+  // Ref for hidden file input to change photo in-place
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Throttling Ref
   const isGeneratingRef = useRef(false);
@@ -85,6 +108,38 @@ const App: React.FC = () => {
     setResult(null);
     setError(null);
     setShowDownloadMenu(false);
+    setIsGeneratingAdvice(false);
+  };
+
+  const handleImageSelected = (base64: string) => {
+    setOriginalImage(base64);
+    // Ensure we start at the top when entering the design view
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setOriginalImage(base64String);
+        setResult(null);
+        setError(null);
+        setShowDownloadMenu(false);
+        setIsGeneratingAdvice(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+      reader.readAsDataURL(file);
+    }
+    // Reset input value to allow selecting same file again
+    if (event.target) {
+      event.target.value = '';
+    }
   };
 
   const handleGoHome = () => {
@@ -152,6 +207,25 @@ const App: React.FC = () => {
     setLoadingState({ isGenerating: true, statusMessage: 'Preparing your design...' });
     setError(null);
     setResult({ originalImage, generatedImage: null, advice: null }); 
+    setIsGeneratingAdvice(false);
+
+    // Smooth Scroll with Custom Calculation
+    // We use setTimeout to ensure the DOM has updated (fade-in animation started)
+    setTimeout(() => {
+      if (resultsRef.current) {
+        // Calculate position relative to viewport + current scroll
+        const elementRect = resultsRef.current.getBoundingClientRect();
+        const absoluteElementTop = elementRect.top + window.scrollY;
+        
+        // Offset for the fixed header (approx 100px provides nice breathing room)
+        const headerOffset = 100;
+        
+        window.scrollTo({
+          top: absoluteElementTop - headerOffset,
+          behavior: 'smooth'
+        });
+      }
+    }, 250); // 250ms allows the UI to expand before scrolling starts
 
     // Define a status updater that updates the UI
     const updateStatus = (msg: string) => {
@@ -159,7 +233,7 @@ const App: React.FC = () => {
     };
 
     try {
-      // 1. Generate Image First (High Priority)
+      // 1. Generate Image Only
       setLoadingState({ isGenerating: true, statusMessage: 'Dreaming up your new room (may take 20s+)...' });
       const generatedImg = await generateRoomRedesign(
         originalImage, 
@@ -167,30 +241,12 @@ const App: React.FC = () => {
         updateStatus
       );
       
-      // Update result with image immediately
+      // Update result with image
       setResult(prev => ({ 
         originalImage, 
         generatedImage: generatedImg, 
         advice: null 
       }));
-
-      // 2. Generate Advice Second (Low Priority)
-      setLoadingState({ isGenerating: true, statusMessage: 'Consulting interior designers...' });
-      
-      try {
-        // Wait 15 seconds to significantly reduce chance of Rate Limit
-        await new Promise(r => setTimeout(r, 15000));
-        
-        const advice = await getDesignAdvice(
-          originalImage, 
-          selectedStyle,
-          updateStatus
-        );
-        setResult(prev => prev ? { ...prev, advice } : null);
-      } catch (adviceErr) {
-        console.warn("Advice generation skipped:", adviceErr);
-        // Don't fail the entire process if advice fails, just log it
-      }
 
     } catch (err: any) {
       console.error("Generation failed", err);
@@ -201,6 +257,24 @@ const App: React.FC = () => {
       setTimeout(() => {
         isGeneratingRef.current = false;
       }, 1000);
+    }
+  };
+
+  const handleGetAdvice = async () => {
+    if (!originalImage || !selectedStyle || isGeneratingAdvice) return;
+    
+    setIsGeneratingAdvice(true);
+    
+    try {
+      const advice = await getDesignAdvice(originalImage, selectedStyle);
+      setResult(prev => prev ? { ...prev, advice } : null);
+    } catch (err: any) {
+      console.error("Advice generation failed", err);
+      // We don't block the UI, just maybe show a small error or allow retry
+      // For now, we'll set the main error for visibility
+      setError("Could not retrieve design advice. Please try again later.");
+    } finally {
+      setIsGeneratingAdvice(false);
     }
   };
 
@@ -239,7 +313,7 @@ const App: React.FC = () => {
                   </p>
 
                   <div className="max-w-xl mx-auto bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-2 rounded-3xl shadow-2xl shadow-indigo-200/40 dark:shadow-indigo-900/20 border border-white/60 dark:border-slate-700/60 transform hover:scale-[1.01] transition-transform duration-300 ring-1 ring-white/60 dark:ring-slate-700/60">
-                    <ImageUpload onImageSelected={setOriginalImage} />
+                    <ImageUpload onImageSelected={handleImageSelected} />
                   </div>
 
                   {/* Feature Grid */}
@@ -323,11 +397,20 @@ const App: React.FC = () => {
             {/* Active Redesign View */}
             {originalImage && (
               <div className="space-y-8 animate-fade-in-up pt-12">
+                {/* Hidden Input for changing photo */}
+                <input 
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                />
+
                 {/* Control Bar */}
                 <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 shadow-xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-700/50">
                   <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className="w-20 h-20 rounded-2xl overflow-hidden relative group cursor-pointer shadow-md ring-4 ring-white dark:ring-slate-700" onClick={handleReset}>
+                      <div className="w-20 h-20 rounded-2xl overflow-hidden relative group cursor-pointer shadow-md ring-4 ring-white dark:ring-slate-700" onClick={() => fileInputRef.current?.click()}>
                          <img src={originalImage} alt="Original" className="w-full h-full object-cover" />
                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6 text-white">
@@ -337,7 +420,7 @@ const App: React.FC = () => {
                       </div>
                       <div>
                         <h2 className="text-2xl font-bold text-slate-900 dark:text-white font-serif">Your Room</h2>
-                        <button onClick={handleReset} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 font-medium hover:underline">
+                        <button onClick={() => fileInputRef.current?.click()} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 font-medium hover:underline">
                           Select different photo
                         </button>
                       </div>
@@ -410,7 +493,7 @@ const App: React.FC = () => {
 
                 {/* Results Section */}
                 {(result || loadingState.isGenerating) && (
-                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12">
+                   <div ref={resultsRef} className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12 scroll-mt-32">
                      {/* Images Area */}
                      <div className="lg:col-span-2 space-y-4">
                         <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-white/60 dark:border-slate-700 aspect-[4/3] bg-white dark:bg-slate-800 group">
@@ -497,19 +580,29 @@ const App: React.FC = () => {
                         ) : result?.advice ? (
                           <AdvicePanel advice={result.advice} />
                         ) : (
-                          // Placeholder when advice is missing or failed (but image exists)
+                          // Placeholder when advice is missing (manual trigger or failed)
                           <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl border border-slate-200 dark:border-slate-700 p-8 h-full flex flex-col items-center justify-center text-center text-slate-400 dark:text-slate-500">
-                             {loadingState.isGenerating ? (
+                             {isGeneratingAdvice ? (
                                <>
                                  <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                                 <p className="text-sm">Creating design plan...</p>
+                                 <p className="text-sm">Consulting expert designers...</p>
                                </>
                              ) : (
                                <>
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 mb-2 opacity-50">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 mb-4 opacity-50">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3.001.516.243.571.376 1.199.376 1.864 0 2.472-1.892 4.477-4.225 4.477V8.5a6.5 6.5 0 1 1 13 0v2.107a2.25 2.25 0 0 1-2.25 2.25h-.375a2.25 2.25 0 0 0 0 4.5h.375v.001M12 6.042c1.94 0 3.73.612 5.207 1.666" />
                                   </svg>
-                                  <p className="text-sm">Design advice not available for this run.</p>
+                                  {result?.generatedImage && (
+                                     <div className="space-y-3">
+                                        <p className="text-sm">Get actionable advice, color palettes, and furniture tips for this design.</p>
+                                        <button 
+                                          onClick={handleGetAdvice}
+                                          className="px-6 py-2.5 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 font-bold text-sm rounded-xl transition-colors border border-indigo-200 dark:border-indigo-800"
+                                        >
+                                           Get Expert Advice
+                                        </button>
+                                     </div>
+                                  )}
                                </>
                              )}
                           </div>
@@ -552,6 +645,23 @@ const App: React.FC = () => {
         {renderContent()}
       </main>
       <Footer />
+
+      {/* Back to Top Button (Only for Redesign View) */}
+      {currentView === 'redesign' && (
+        <button
+          onClick={scrollToTop}
+          className={`fixed bottom-4 right-4 md:bottom-8 md:right-8 z-50 p-3 md:p-4 rounded-full shadow-2xl transition-all duration-500 transform
+            ${showScrollTop ? 'translate-y-0 opacity-100' : 'translate-y-24 opacity-0 pointer-events-none'}
+            bg-slate-900 dark:bg-indigo-600 text-white hover:bg-slate-700 dark:hover:bg-indigo-500
+            hover:scale-110 active:scale-95 border border-white/20 dark:border-indigo-400/30
+          `}
+          aria-label="Back to Top"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 md:w-6 md:h-6">
+            <path fillRule="evenodd" d="M10 17a.75.75 0 0 1-.75-.75V5.612L5.29 9.77a.75.75 0 0 1-1.08-1.04l5.25-5.5a.75.75 0 0 1 1.08 0l5.25 5.5a.75.75 0 1 1-1.08 1.04l-3.96-4.158V16.25A.75.75 0 0 1 10 17Z" clipRule="evenodd" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 };
