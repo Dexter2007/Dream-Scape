@@ -13,11 +13,35 @@ const getMimeType = (base64Data: string) => {
   return match ? match[1] : 'image/jpeg';
 };
 
+// Robust API Key Retrieval
+const getApiKey = (): string | undefined => {
+  // 1. Try standard process.env (Node/Webpack)
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
+  }
+  
+  // 2. Try Vite import.meta.env
+  try {
+    // @ts-ignore
+    if (import.meta && import.meta.env && import.meta.env.VITE_API_KEY) {
+      // @ts-ignore
+      return import.meta.env.VITE_API_KEY;
+    }
+  } catch (e) {
+    // Ignore if not in Vite
+  }
+
+  return undefined;
+};
+
 export const generateRoomRedesign = async (
   base64Image: string,
   style: string
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key missing. Please set VITE_API_KEY in your .env file.");
+
+  const ai = new GoogleGenAI({ apiKey });
   const modelId = 'gemini-2.5-flash-image';
   
   const prompt = `
@@ -66,10 +90,12 @@ export const generateRoomRedesign = async (
     throw new Error("No image generated in response.");
   } catch (error: any) {
     console.error("Redesign error:", error);
-    // Pass through specific API key errors if they occur during the call
-    if (error.message?.includes("API key")) {
-       throw new Error("API Key Invalid or Expired. Please check your configuration.");
+    
+    // Handle specific API errors
+    if (error.status === 403 || (error.message && error.message.includes('leaked'))) {
+      throw new Error("Your API Key has been revoked by Google because it was exposed. Please generate a new key at aistudio.google.com.");
     }
+    
     throw error;
   }
 };
@@ -78,7 +104,10 @@ export const getDesignAdvice = async (
   base64Image: string,
   style: string
 ): Promise<DesignAdvice> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key missing.");
+
+  const ai = new GoogleGenAI({ apiKey });
   const modelId = 'gemini-3-flash-preview';
 
   const prompt = `
@@ -142,9 +171,11 @@ export const getDesignAdvice = async (
     return JSON.parse(jsonText) as DesignAdvice;
   } catch (error: any) {
     console.error("Advice error:", error);
-     if (error.message?.includes("API key")) {
-       throw new Error("API Key Invalid or Expired.");
+    
+    if (error.status === 403 || (error.message && error.message.includes('leaked'))) {
+      throw new Error("API Key Revoked/Leaked. Please generate a new one.");
     }
+    
     throw error;
   }
 };
