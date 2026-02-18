@@ -15,17 +15,39 @@ import { generateRoomRedesign, getDesignAdvice } from './services/geminiService'
 import { ROOM_STYLES } from './constants';
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<AppView>('redesign');
-  
-  // Theme State
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  // View State with Persistence
+  const [currentView, setCurrentView] = useState<AppView>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dreamspace_view');
+      if (saved === 'redesign' || saved === 'designer' || saved === 'shop' || saved === 'quiz') {
+        return saved;
+      }
+    }
+    return 'redesign';
+  });
 
-  // Toggle Dark Mode Class
+  // Persist View & Scroll to Top on Change
+  useEffect(() => {
+    localStorage.setItem('dreamspace_view', currentView);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentView]);
+  
+  // Theme State with Persistence
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('dreamspace_theme') === 'dark';
+    }
+    return false;
+  });
+
+  // Toggle Dark Mode Class & Persist
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('dreamspace_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('dreamspace_theme', 'light');
     }
   }, [isDarkMode]);
 
@@ -185,7 +207,7 @@ const App: React.FC = () => {
   const handleQuizComplete = (style: string) => {
     setSelectedStyle(style);
     setCurrentView('redesign');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Scroll is handled by useEffect on currentView change
   };
 
   const renderContent = () => {

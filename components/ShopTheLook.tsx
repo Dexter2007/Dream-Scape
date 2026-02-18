@@ -4,9 +4,10 @@ import { LookCollection, RoomStyle, ProductItem } from '../types';
 import { ImageUpload } from './ImageUpload';
 import { generateShopTheLook } from '../services/geminiService';
 import { LoadingOverlay } from './LoadingOverlay';
+import { ROOM_STYLES } from '../constants';
 
-// Static fallbacks for "Trending" - Now with real Unsplash images
-const COLLECTIONS: LookCollection[] = [
+// Initial curated collections
+const INITIAL_COLLECTIONS: LookCollection[] = [
   {
     id: '1',
     title: 'Modern Sanctuary',
@@ -45,6 +46,56 @@ const COLLECTIONS: LookCollection[] = [
   },
 ];
 
+// Helper pool for random products
+const PRODUCT_IMAGES_POOL = [
+  'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=300&q=80',
+  'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&w=300&q=80',
+  'https://images.unsplash.com/photo-1532372320572-cda25653a26d?auto=format&fit=crop&w=300&q=80',
+  'https://images.unsplash.com/photo-1507473888900-52e1adad70ac?auto=format&fit=crop&w=300&q=80',
+  'https://images.unsplash.com/photo-1575414723320-c2883b27c15e?auto=format&fit=crop&w=300&q=80',
+  'https://images.unsplash.com/photo-1549887534-1541e9326642?auto=format&fit=crop&w=300&q=80',
+  'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=300&q=80',
+  'https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=300&q=80',
+  'https://images.unsplash.com/photo-1522751512423-1d02da42d22b?auto=format&fit=crop&w=300&q=80',
+  'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=300&q=80',
+];
+
+const generateRandomCollection = (idSuffix: string): LookCollection => {
+  // Pick a random style from the global constants
+  const randomStyleIndex = Math.floor(Math.random() * ROOM_STYLES.length);
+  const styleData = ROOM_STYLES[randomStyleIndex];
+  
+  // Generate random products for this style
+  const productCount = Math.floor(Math.random() * 3) + 3; // 3 to 5 products
+  const products: ProductItem[] = Array.from({ length: productCount }).map((_, i) => {
+    const types = ['Sofa', 'Chair', 'Lamp', 'Table', 'Rug', 'Art', 'Plant', 'Vase', 'Cabinet', 'Mirror'];
+    const type = types[Math.floor(Math.random() * types.length)];
+    const price = Math.floor(Math.random() * 1500) + 50;
+    const img = PRODUCT_IMAGES_POOL[Math.floor(Math.random() * PRODUCT_IMAGES_POOL.length)];
+    
+    return {
+      id: `rand-${idSuffix}-${i}`,
+      name: `${styleData.label} ${type}`,
+      price,
+      image: img,
+      query: `${styleData.label} ${type} furniture`,
+      category: 'Furniture'
+    };
+  });
+
+  const titles = ['Living', 'Retreat', 'Haven', 'Space', 'Lounge', 'Studio', 'Corner', 'Oasis', 'Sanctuary', 'Vibes'];
+  const randomTitleSuffix = titles[Math.floor(Math.random() * titles.length)];
+
+  return {
+    id: `col-${idSuffix}`,
+    title: `${styleData.label} ${randomTitleSuffix}`,
+    style: styleData.value,
+    description: styleData.description,
+    image: styleData.image,
+    products
+  };
+};
+
 // Helper to generate a placeholder color based on string
 const stringToColor = (str: string) => {
   let hash = 0;
@@ -55,51 +106,141 @@ const stringToColor = (str: string) => {
   return '#' + '00000'.substring(0, 6 - c.length) + c;
 };
 
-// Component for a Product Card
+// --- Product Card Component (Matched to Screenshot) ---
 const ProductCard: React.FC<{ product: ProductItem }> = ({ product }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const bgColor = stringToColor(product.name + (product.category || ''));
   const buyUrl = `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(product.query || product.name)}`;
 
   return (
-    <div className="flex flex-col sm:flex-row items-center gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all duration-300 group cursor-default">
-      <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 relative bg-slate-100 dark:bg-slate-700">
-        {/* Placeholder / Loading State */}
-        <div 
-          className={`absolute inset-0 flex items-center justify-center text-white font-bold text-xl uppercase transition-opacity duration-500 z-10 ${imageLoaded ? 'opacity-0' : 'opacity-100'}`}
+    <div className="flex items-center gap-5 p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-300 group">
+      {/* Product Image Square */}
+      <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 relative bg-slate-100 dark:bg-slate-700 shadow-inner">
+         <div 
+          className={`absolute inset-0 flex items-center justify-center text-white font-bold text-xl uppercase ${imageLoaded ? 'opacity-0' : 'opacity-100'}`}
           style={{ backgroundColor: bgColor }}
         >
-           <span className="drop-shadow-md">{product.name.substring(0, 1)}</span>
+           {product.name.substring(0, 1)}
         </div>
-        
         {product.image && (
           <img 
             src={product.image} 
-            alt={product.name} 
+            alt={product.name}
             loading="lazy"
             onLoad={() => setImageLoaded(true)}
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 z-20 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`} 
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
           />
         )}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors pointer-events-none z-30" />
       </div>
       
-      <div className="flex-grow text-center sm:text-left">
-        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">{product.category || 'Product'}</div>
-        <h5 className="font-bold text-slate-900 dark:text-white leading-tight mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{product.name}</h5>
-        <p className="text-indigo-600 dark:text-indigo-400 font-bold text-sm">${product.price}</p>
+      {/* Product Info */}
+      <div className="flex-grow min-w-0 flex flex-col justify-center">
+        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Product</div>
+        <h5 className="font-serif font-bold text-lg text-slate-900 dark:text-white leading-tight truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+          {product.name}
+        </h5>
+        <div className="text-indigo-600 dark:text-indigo-400 font-bold text-base mt-0.5">
+           ${product.price}
+        </div>
       </div>
+      
+      {/* Buy Button */}
       <a 
         href={buyUrl} 
         target="_blank" 
         rel="noopener noreferrer"
-        className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold bg-slate-900 dark:bg-indigo-600 text-white rounded-lg hover:bg-indigo-600 dark:hover:bg-indigo-500 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 transform flex items-center justify-center gap-2 whitespace-nowrap active:scale-95"
+        className="hidden sm:flex bg-slate-900 dark:bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold items-center gap-2 hover:bg-slate-800 dark:hover:bg-indigo-500 transition-colors shadow-lg shadow-slate-900/10 active:scale-95 whitespace-nowrap"
       >
-        <span>Buy Now</span>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+        Buy Now
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
           <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
         </svg>
       </a>
+      {/* Mobile Icon Button */}
+      <a 
+        href={buyUrl} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="sm:hidden bg-slate-900 dark:bg-indigo-600 text-white p-2.5 rounded-lg hover:bg-slate-800 dark:hover:bg-indigo-500 transition-colors shadow-lg active:scale-95"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+           <path d="M1 1.75A.75.75 0 0 1 1.75 1h1.628a1.75 1.75 0 0 1 1.734 1.51L5.18 3a65.25 65.25 0 0 1 13.36 1.412.75.75 0 0 1 .58.875 48.645 48.645 0 0 1-1.618 6.2.75.75 0 0 1-.712.513H6a2.503 2.503 0 0 0-2.292 1.5H17.25a.75.75 0 0 1 0 1.5H2.76a.75.75 0 0 1-.748-.807 4.002 4.002 0 0 1 2.716-3.486L3.626 2.716a.25.25 0 0 0-.248-.216H1.75A.75.75 0 0 1 1 1.75ZM6 17.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm9.75 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+        </svg>
+      </a>
+    </div>
+  );
+};
+
+// --- Collection Card Component (Wide Layout) ---
+const CollectionCard: React.FC<{ collection: LookCollection }> = ({ collection }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const displayedProducts = isExpanded ? collection.products : collection.products.slice(0, 4);
+  const remainingCount = Math.max(0, collection.products.length - 4);
+
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-[2rem] overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-500 border border-slate-200 dark:border-slate-700 flex flex-col lg:flex-row h-full min-h-[500px]">
+      
+      {/* Left: Hero Image */}
+      <div className="lg:w-[60%] relative group overflow-hidden min-h-[300px]">
+        <img 
+          src={collection.image} 
+          alt={collection.title} 
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+        />
+        {/* Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-90 transition-opacity"></div>
+        
+        {/* Content Overlay */}
+        <div className="absolute bottom-0 left-0 right-0 p-8 lg:p-10 flex flex-col items-start gap-3">
+           <span className="bg-indigo-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest shadow-lg">
+             {collection.style}
+           </span>
+           <h3 className="text-4xl lg:text-5xl font-serif font-bold text-white leading-tight drop-shadow-sm">
+             {collection.title}
+           </h3>
+           <p className="text-slate-200 text-sm lg:text-base max-w-lg font-light leading-relaxed">
+             {collection.description}
+           </p>
+        </div>
+      </div>
+
+      {/* Right: Product List */}
+      <div className="lg:w-[40%] bg-white dark:bg-slate-800 flex flex-col border-l border-slate-100 dark:border-slate-700">
+         <div className="p-8 pb-4 flex justify-between items-baseline border-b border-slate-50 dark:border-slate-700/50">
+            <h4 className="font-serif font-bold text-2xl text-slate-900 dark:text-white">Featured Items</h4>
+            <span className="font-serif italic text-slate-400 dark:text-slate-500 text-sm">{collection.products.length} items</span>
+         </div>
+
+         <div className="flex-grow p-6 space-y-4 overflow-y-auto max-h-[600px] custom-scrollbar bg-slate-50/50 dark:bg-slate-900/20">
+            {displayedProducts.map(product => (
+               <ProductCard key={product.id} product={product} />
+            ))}
+            
+            {!isExpanded && remainingCount > 0 && (
+              <button 
+                onClick={() => setIsExpanded(true)}
+                className="w-full py-3 text-sm text-slate-500 hover:text-indigo-600 font-medium transition-colors border border-dashed border-slate-300 rounded-xl hover:border-indigo-300 flex items-center justify-center gap-2 group"
+              >
+                 <span>+ {remainingCount} more items</span>
+                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 group-hover:translate-y-0.5 transition-transform">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                 </svg>
+              </button>
+            )}
+
+            {isExpanded && collection.products.length > 4 && (
+               <button 
+                onClick={() => setIsExpanded(false)}
+                className="w-full py-3 text-sm text-slate-400 hover:text-slate-600 font-medium transition-colors flex items-center justify-center gap-2 group border border-transparent hover:border-slate-200 rounded-xl"
+              >
+                 <span>Show less</span>
+                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 group-hover:-translate-y-0.5 transition-transform">
+                    <path fillRule="evenodd" d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.832 6.29 12.77a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01.02 1.06z" clipRule="evenodd" />
+                 </svg>
+              </button>
+            )}
+         </div>
+      </div>
     </div>
   );
 };
@@ -110,11 +251,15 @@ export const ShopTheLook: React.FC = () => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Infinite Scroll State
-  const [displayedCollections, setDisplayedCollections] = useState<LookCollection[]>(COLLECTIONS);
+  const [displayedCollections, setDisplayedCollections] = useState<LookCollection[]>(INITIAL_COLLECTIONS);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
+
+  // Back to Top State
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   const handleImageSelect = async (base64: string) => {
     setPreviewImage(base64);
@@ -124,7 +269,7 @@ export const ShopTheLook: React.FC = () => {
     try {
        const look = await generateShopTheLook(base64);
        setGeneratedLook(look);
-       // Add the new look to the collections feed
+       // Prepend to list but we will display it separately in "Result" section for better UX
        setDisplayedCollections(prev => [look, ...prev]);
        
        setTimeout(() => {
@@ -143,6 +288,24 @@ export const ShopTheLook: React.FC = () => {
     setPreviewImage(null);
     setError(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleHiddenFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        handleImageSelect(base64);
+      };
+      reader.readAsDataURL(file);
+    }
+    // Reset so same file can be selected again
+    if (e.target) e.target.value = '';
   };
 
   // Infinite Scroll Observer
@@ -167,173 +330,155 @@ export const ShopTheLook: React.FC = () => {
     };
   }, [displayedCollections, isLoadingMore]);
 
+  // Scroll to Top Observer
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const loadMoreCollections = () => {
     setIsLoadingMore(true);
-    // Simulate fetching more data by duplicating existing collections with new IDs
     setTimeout(() => {
-      const newCollections = COLLECTIONS.map((c, i) => ({
-        ...c,
-        id: `${c.id}-${Date.now()}-${i}`,
-        title: `${c.title} ${Math.floor(Math.random() * 100)}` // Variation in title
-      }));
-      setDisplayedCollections(prev => [...prev, ...newCollections]);
+      // Generate 2 new random collections derived from our diverse style definitions
+      // This ensures new content is always unique and random
+      const newItems = [
+          generateRandomCollection(`${Date.now()}-1`),
+          generateRandomCollection(`${Date.now()}-2`)
+      ];
+      setDisplayedCollections(prev => [...prev, ...newItems]);
       setIsLoadingMore(false);
     }, 1500);
   };
 
   return (
-    <div className="space-y-16 animate-fade-in-up pb-12">
-      
-      {/* Hero / Upload Section */}
-      <div className="text-center max-w-4xl mx-auto space-y-8">
-        <div className="space-y-4">
-          <h2 className="text-4xl md:text-5xl font-bold font-serif text-slate-900 dark:text-white">Shop Your Inspiration</h2>
-          <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
-            Upload any room photo you love. Our AI will analyze the style and find similar furniture and decor items for you to buy.
-          </p>
-        </div>
+    <>
+      <div className="space-y-20 animate-fade-in-up pb-24">
+        {/* Hidden File Input */}
+        <input 
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          accept="image/*"
+          onChange={handleHiddenFileInput}
+        />
 
-        {!previewImage && !generatedLook && (
-           <div className="transform hover:scale-[1.01] transition-transform duration-300">
-             <ImageUpload onImageSelected={handleImageSelect} />
-           </div>
-        )}
-
-        {analyzing && previewImage && (
-          <div className="relative h-96 rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl mx-auto max-w-3xl">
-             <img src={previewImage} className="w-full h-full object-cover blur-sm opacity-50" alt="Scanning" />
-             <div className="absolute inset-0 flex items-center justify-center">
-                <LoadingOverlay status="Identifying products..." />
-             </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 rounded-xl border border-red-100 dark:border-red-800 text-sm">
-            {error}
-            <button onClick={() => setPreviewImage(null)} className="ml-4 underline font-bold">Try Again</button>
-          </div>
-        )}
-      </div>
-
-      {/* Generated Result Section (Top Detail View) */}
-      {generatedLook && (
-        <div ref={resultRef} className="animate-fade-in-up scroll-mt-24">
-           <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <span className="bg-gradient-to-r from-indigo-500 to-purple-500 text-transparent bg-clip-text">Analysis Complete</span>
-              </h3>
-              <button onClick={handleReset} className="text-sm font-medium text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-colors">
-                 Scan Another Room
-              </button>
-           </div>
-
-           <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-             <div className="grid lg:grid-cols-2">
-                {/* Image Side */}
-                <div className="relative h-[400px] lg:h-auto min-h-[400px] group">
-                   <img src={generatedLook.image} alt="Analyzed Room" className="w-full h-full object-cover" />
-                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-8">
-                      <span className="bg-white/20 backdrop-blur-md border border-white/30 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider w-fit mb-3">
-                        {generatedLook.style}
-                      </span>
-                      <h2 className="text-3xl font-bold text-white mb-2 font-serif">{generatedLook.title}</h2>
-                      <p className="text-white/90 text-sm leading-relaxed max-w-md">{generatedLook.description}</p>
-                   </div>
-                </div>
-
-                {/* Products Side */}
-                <div className="p-6 lg:p-10 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col h-full">
-                   <div className="flex items-center gap-2 mb-6">
-                      <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-lg text-indigo-600 dark:text-indigo-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                          <path fillRule="evenodd" d="M7.5 6v.75H5.513c-.96 0-1.764.724-1.865 1.679l-1.263 12A1.875 1.875 0 0 0 4.25 22.5h15.5a1.875 1.875 0 0 0 1.865-2.071l-1.263-12a1.875 1.875 0 0 0-1.865-1.679H16.5V6a4.5 4.5 0 1 0-9 0ZM12 3a3 3 0 0 0-3 3v.75h6V6a3 3 0 0 0-3-3Zm-3 8.25a3 3 0 1 0 6 0v-.75a.75.75 0 0 1 1.5 0v.75a4.5 4.5 0 1 1-9 0v-.75a.75.75 0 0 1 1.5 0v.75Z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <h4 className="font-bold text-slate-900 dark:text-white text-lg">Featured Items</h4>
-                      <span className="text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold ml-auto">
-                        {generatedLook.products.length} Found
-                      </span>
-                   </div>
-                   
-                   <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-grow max-h-[500px]">
-                      {generatedLook.products.map((product) => (
-                         <ProductCard key={product.id} product={product} />
-                      ))}
-                   </div>
-                </div>
-             </div>
-           </div>
-        </div>
-      )}
-
-      {/* Collections Divider */}
-      <div className="relative py-8">
-        <div className="absolute inset-0 flex items-center" aria-hidden="true">
-          <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
-        </div>
-        <div className="relative flex justify-center">
-          <span className="bg-[#fafaf9] dark:bg-[#0f172a] px-6 text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-             Trending Collections
-          </span>
-        </div>
-      </div>
-
-      {/* Infinite Scroll Grid */}
-      <div className="grid gap-12">
-        {displayedCollections.map((collection, index) => (
-          <div key={`${collection.id}-${index}`} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors group animate-fade-in-up">
-            <div className="grid md:grid-cols-2 lg:grid-cols-5">
-              <div className="lg:col-span-3 relative h-64 md:h-auto overflow-hidden">
-                <img 
-                  src={collection.image} 
-                  alt={collection.title}
-                  loading="lazy"
-                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-8">
-                  <div className="transform transition-transform duration-300 group-hover:-translate-y-2">
-                    <span className="bg-indigo-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2 inline-block shadow-lg">
-                      {collection.style}
-                    </span>
-                    <h3 className="text-3xl font-bold text-white mb-2 font-serif">{collection.title}</h3>
-                    <p className="text-slate-200 text-sm max-w-md">{collection.description}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="lg:col-span-2 p-6 lg:p-8 bg-slate-50 dark:bg-slate-900/30 flex flex-col justify-center transition-colors border-l border-slate-100 dark:border-slate-700">
-                <h4 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                   Featured Items
-                   <span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-auto">{collection.products.length} items</span>
-                </h4>
-                <div className="space-y-4">
-                  {collection.products.slice(0, 3).map((product) => (
-                    <ProductCard key={product.id} product={product} />
-                  ))}
-                  {collection.products.length > 3 && (
-                    <div className="text-center pt-2">
-                      <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">+ {collection.products.length - 3} more items</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+        {/* Hero / Upload Section */}
+        <div className="text-center max-w-4xl mx-auto space-y-12 pt-8">
+          <div className="space-y-6">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 text-xs font-bold uppercase tracking-widest border border-indigo-100 dark:border-indigo-800">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+              AI Visual Search
             </div>
+            <h2 className="text-5xl md:text-7xl font-bold font-serif text-slate-900 dark:text-white tracking-tight">
+              Shop the <span className="italic text-indigo-600 dark:text-indigo-400">Look</span>
+            </h2>
+            <p className="text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto font-light leading-relaxed">
+              Upload any room photo. Our AI breaks down the style and finds the exact furniture pieces for you to buy.
+            </p>
           </div>
-        ))}
 
-        {/* Sentinel for Infinite Scroll */}
-        <div ref={observerTarget} className="flex justify-center py-8">
-          {isLoadingMore ? (
-             <div className="flex flex-col items-center gap-3">
-               <div className="w-8 h-8 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-               <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Loading more styles...</span>
+          {!previewImage && !generatedLook && (
+             <div className="transform hover:scale-[1.01] transition-transform duration-500">
+               <ImageUpload onImageSelected={handleImageSelect} />
              </div>
-          ) : (
-             <div className="h-4"></div>
+          )}
+
+          {analyzing && previewImage && (
+            <div className="relative h-96 rounded-[2rem] overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl mx-auto max-w-3xl">
+               <img src={previewImage} className="w-full h-full object-cover blur-md opacity-40 scale-110" alt="Scanning" />
+               <div className="absolute inset-0 flex items-center justify-center">
+                  <LoadingOverlay status="Analyzing aesthetics..." />
+               </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-6 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-300 rounded-2xl border border-red-100 dark:border-red-900/50 flex flex-col items-center gap-2">
+              <span className="font-bold">Analysis Failed</span>
+              <span className="text-sm opacity-90">{error}</span>
+              <button onClick={() => setPreviewImage(null)} className="mt-2 text-xs uppercase tracking-wider font-bold underline">Try Again</button>
+            </div>
+          )}
+        </div>
+
+        {/* Generated Result Section (Top Detail View) */}
+        {generatedLook && (
+          <div ref={resultRef} className="animate-fade-in-up scroll-mt-32 max-w-6xl mx-auto">
+             <div className="flex justify-between items-end mb-8 px-4">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Analysis Result</p>
+                  <h3 className="text-3xl font-serif font-bold text-slate-900 dark:text-white">
+                     Your Custom Look
+                  </h3>
+                </div>
+                <button 
+                  onClick={() => fileInputRef.current?.click()} 
+                  className="text-sm font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors flex items-center gap-2"
+                >
+                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path d="M17 10a.75.75 0 0 1-.75.75H5.612l4.158 3.96a.75.75 0 1 1-1.04 1.08l-5.5-5.25a.75.75 0 0 1 0-1.08l5.5-5.25a.75.75 0 1 1 1.04 1.08L5.612 9.25H16.25A.75.75 0 0 1 17 10Z" /></svg>
+                   Scan Another
+                </button>
+             </div>
+             
+             <CollectionCard collection={generatedLook} />
+          </div>
+        )}
+
+        {/* Collections Grid Header */}
+        <div className="flex flex-col items-center justify-center py-12 space-y-4">
+           <div className="w-px h-16 bg-gradient-to-b from-transparent via-slate-300 to-slate-300 dark:via-slate-600 dark:to-slate-600"></div>
+           <h2 className="text-4xl md:text-5xl font-bold font-serif text-slate-900 dark:text-white text-center">
+              Trending Collections
+           </h2>
+           <p className="text-slate-500 dark:text-slate-400 max-w-xl text-center">
+              Hand-picked interior designs with shoppable furniture lists.
+           </p>
+        </div>
+
+        {/* Editorial List (Single Column Wide Cards) */}
+        <div className="flex flex-col gap-16 max-w-6xl mx-auto">
+          {displayedCollections.map((collection, index) => (
+             <div key={`${collection.id}-${index}`} className="animate-fade-in-up">
+                <CollectionCard collection={collection} />
+             </div>
+          ))}
+        </div>
+        
+        {/* Loading Sentinel */}
+        <div ref={observerTarget} className="flex justify-center py-12">
+          {isLoadingMore && (
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative w-12 h-12">
+                   <div className="absolute inset-0 border-4 border-slate-100 dark:border-slate-800 rounded-full"></div>
+                   <div className="absolute inset-0 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <span className="text-xs text-slate-400 font-bold uppercase tracking-widest animate-pulse">Curating more styles...</span>
+              </div>
           )}
         </div>
       </div>
-    </div>
+
+      {/* Back to Top Button */}
+      <button
+        onClick={scrollToTop}
+        className={`fixed bottom-4 right-4 md:bottom-8 md:right-8 z-50 p-3 md:p-4 rounded-full shadow-2xl transition-all duration-500 transform
+          ${showScrollTop ? 'translate-y-0 opacity-100' : 'translate-y-24 opacity-0 pointer-events-none'}
+          bg-slate-900 dark:bg-indigo-600 text-white hover:bg-slate-700 dark:hover:bg-indigo-500
+          hover:scale-110 active:scale-95 border border-white/20 dark:border-indigo-400/30
+        `}
+        aria-label="Back to Top"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 md:w-6 md:h-6">
+          <path fillRule="evenodd" d="M10 17a.75.75 0 0 1-.75-.75V5.612L5.29 9.77a.75.75 0 0 1-1.08-1.04l5.25-5.5a.75.75 0 0 1 1.08 0l5.25 5.5a.75.75 0 1 1-1.08 1.04l-3.96-4.158V16.25A.75.75 0 0 1 10 17Z" clipRule="evenodd" />
+        </svg>
+      </button>
+    </>
   );
 };
