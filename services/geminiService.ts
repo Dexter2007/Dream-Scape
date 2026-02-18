@@ -1,25 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { RoomStyle, DesignAdvice } from "../types";
-
-// Safely retrieve API key from various environment configurations
-const getApiKey = (): string => {
-  // Check for Vite environment
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_KEY) {
-    return (import.meta as any).env.VITE_API_KEY;
-  }
-  // Check for standard Node/Process environment (safely)
-  try {
-    if (typeof process !== 'undefined' && process.env?.API_KEY) {
-      return process.env.API_KEY;
-    }
-  } catch (e) {
-    // Ignore ReferenceError if process is not defined
-  }
-  return '';
-};
-
-const apiKey = getApiKey();
-const ai = new GoogleGenAI({ apiKey });
 
 // Helper to clean base64 string
 const cleanBase64 = (base64Data: string) => {
@@ -36,12 +17,11 @@ export const generateRoomRedesign = async (
   base64Image: string,
   style: string
 ): Promise<string> => {
-  if (!apiKey) throw new Error("API Key not found. Please check your .env file.");
-
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const modelId = 'gemini-2.5-flash-image';
   
   const prompt = `
-    Act as a professional interior design AI.
+    Act as a professional interior designer.
     Redesign the room in the input image to fully embody the '${style}' design style.
     
     REQUIREMENTS:
@@ -49,9 +29,8 @@ export const generateRoomRedesign = async (
     2. TRANSFORM: Furniture, decor, materials, colors, lighting to strictly match the '${style}' aesthetic.
     3. QUALITY: Photorealistic, high definition, natural lighting.
     
-    MANDATORY CLEANUP (CRITICAL):
-    - DETECT and COMPLETELY REMOVE any existing watermarks, text overlays, logos, date stamps, or copyright marks from the original image. The final image must be clean of any previous branding.
-    - Inpaint the erased areas to blend seamlessly with the new design's background (walls, floor, etc).
+    MANDATORY CLEANUP:
+    - DETECT and COMPLETELY REMOVE any existing watermarks, text overlays, logos, or copyright marks.
     - DO NOT generate any new text, letters, or characters in the image. The output must be purely visual.
     
     Return only the generated image.
@@ -74,7 +53,6 @@ export const generateRoomRedesign = async (
       }
     });
 
-    // Check for image parts in the response
     if (response.candidates) {
       for (const candidate of response.candidates) {
         for (const part of candidate.content.parts) {
@@ -85,18 +63,6 @@ export const generateRoomRedesign = async (
       }
     }
     
-    // Check if there was a text refusal or error
-    let refusalText = "";
-    if (response.candidates && response.candidates[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.text) refusalText += part.text;
-      }
-    }
-
-    if (refusalText) {
-      throw new Error(`AI returned text instead of image: ${refusalText.substring(0, 100)}...`);
-    }
-
     throw new Error("No image generated in response.");
   } catch (error) {
     console.error("Redesign error:", error);
@@ -108,14 +74,12 @@ export const getDesignAdvice = async (
   base64Image: string,
   style: string
 ): Promise<DesignAdvice> => {
-  if (!apiKey) throw new Error("API Key not found. Please check your .env file.");
-
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const modelId = 'gemini-3-flash-preview';
 
   const prompt = `
-    Analyze this room image. I want to redesign it in '${style}' style.
-    Provide professional interior design advice.
-    Return the response in JSON format.
+    Analyze this room image for a '${style}' style redesign.
+    Provide professional interior design advice in JSON format.
   `;
 
   try {

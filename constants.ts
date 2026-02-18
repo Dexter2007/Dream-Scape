@@ -1,3 +1,4 @@
+
 import { RoomStyle } from './types';
 
 export const ROOM_STYLES: { value: RoomStyle; label: string; description: string; image: string }[] = [
@@ -5,7 +6,7 @@ export const ROOM_STYLES: { value: RoomStyle; label: string; description: string
     value: RoomStyle.Modern, 
     label: 'Modern', 
     description: 'Clean lines, neutral colors, and simplicity.',
-    image: 'https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?auto=format&fit=crop&w=800&q=80' 
+    image: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=800&q=80' 
   },
   { 
     value: RoomStyle.Japandi, 
@@ -23,13 +24,13 @@ export const ROOM_STYLES: { value: RoomStyle; label: string; description: string
     value: RoomStyle.Minimalist, 
     label: 'Minimalist', 
     description: 'Less is more. Functional furniture and lack of clutter.',
-    image: 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=800&q=80' 
+    image: 'https://images.unsplash.com/photo-1531835551805-16d864c8d311?auto=format&fit=crop&w=800&q=80' 
   },
   { 
     value: RoomStyle.Coastal, 
     label: 'Coastal', 
     description: 'Breezy, beachy vibes with light blues and whites.',
-    image: 'https://images.unsplash.com/photo-1600210492493-0946911123ea?auto=format&fit=crop&w=800&q=80' 
+    image: 'https://images.unsplash.com/photo-1520697830682-bbb6e85e2b0b?auto=format&fit=crop&w=800&q=80' 
   },
   { 
     value: RoomStyle.Industrial, 
@@ -53,7 +54,7 @@ export const ROOM_STYLES: { value: RoomStyle; label: string; description: string
     value: RoomStyle.Neoclassical, 
     label: 'Neoclassical', 
     description: 'Elegant, timeless, combining luxury with symmetry.',
-    image: 'https://images.unsplash.com/photo-1560185127-6ed189bf02f4?auto=format&fit=crop&w=800&q=80' 
+    image: 'https://images.unsplash.com/photo-1505692952047-1a78307da8f2?auto=format&fit=crop&w=800&q=80' 
   },
   { 
     value: RoomStyle.Maximalist, 
@@ -77,25 +78,25 @@ export const ROOM_STYLES: { value: RoomStyle; label: string; description: string
     value: RoomStyle.Scandinavian, 
     label: 'Scandinavian', 
     description: 'Cozy, functional, and warm with plenty of light.',
-    image: 'https://images.unsplash.com/photo-1532323544230-7191fd510c59?auto=format&fit=crop&w=800&q=80' 
+    image: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=800&q=80' 
   },
   { 
     value: RoomStyle.Cyberpunk, 
     label: 'Cyberpunk', 
     description: 'Neon lights, high-tech, and futuristic.',
-    image: 'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=800&q=80' 
+    image: 'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=800&q=80' 
   },
   { 
     value: RoomStyle.Gothic, 
     label: 'Gothic', 
     description: 'Dark, dramatic, rich textures and moodiness.',
-    image: 'https://images.unsplash.com/photo-1579541591970-eabc27d97d42?auto=format&fit=crop&w=800&q=80' 
+    image: 'https://images.unsplash.com/photo-1534595038511-9f219fe0c979?auto=format&fit=crop&w=800&q=80' 
   },
   { 
     value: RoomStyle.Baroque, 
     label: 'Baroque', 
     description: 'Ornate, opulent, gold accents and drama.',
-    image: 'https://images.unsplash.com/photo-1622372738946-a28763b1a9b4?auto=format&fit=crop&w=800&q=80' 
+    image: 'https://images.unsplash.com/photo-1577083288073-40892c0860a4?auto=format&fit=crop&w=800&q=80' 
   },
   { 
     value: RoomStyle.Zen, 
@@ -113,31 +114,31 @@ export const ROOM_STYLES: { value: RoomStyle; label: string; description: string
     value: RoomStyle.Rustic,
     label: 'Rustic',
     description: 'Natural, aged, organic, and rough-hewn elements.',
-    image: 'https://images.unsplash.com/photo-1540932296774-3243d853c16c?auto=format&fit=crop&w=800&q=80'
+    image: 'https://images.unsplash.com/photo-1510798831971-661eb04b3739?auto=format&fit=crop&w=800&q=80'
   },
   {
     value: RoomStyle.Bauhaus,
     label: 'Bauhaus',
     description: 'Functional, abstract, geometric, and artistic.',
-    image: 'https://images.unsplash.com/photo-1520699049698-acd2fcc51056?auto=format&fit=crop&w=800&q=80'
+    image: 'https://images.unsplash.com/photo-1513161455079-7dc1de15ef3e?auto=format&fit=crop&w=800&q=80'
   },
   {
     value: RoomStyle.Victorian,
     label: 'Victorian',
     description: 'Complex, orderly, ornamented, and classic.',
-    image: 'https://images.unsplash.com/photo-1572097662444-1f14a0e28a55?auto=format&fit=crop&w=800&q=80'
+    image: 'https://images.unsplash.com/photo-1558603668-6570496b66f8?auto=format&fit=crop&w=800&q=80'
   },
   {
     value: RoomStyle.FrenchCountry,
     label: 'French Country',
     description: 'Soft colors, toile patterns, and refined rustic accents.',
-    image: 'https://images.unsplash.com/photo-1484154218962-a1c00207099b?auto=format&fit=crop&w=800&q=80'
+    image: 'https://images.unsplash.com/photo-1588854337236-6889d631faa8?auto=format&fit=crop&w=800&q=80'
   },
   {
     value: RoomStyle.HollywoodRegency,
     label: 'Hollywood Regency',
     description: 'Glitz, glamour, lacquer, and luxe details.',
-    image: 'https://images.unsplash.com/photo-1505692794401-b31e7c1d283c?auto=format&fit=crop&w=800&q=80'
+    image: 'https://images.unsplash.com/photo-1551298370-9d3d53740c72?auto=format&fit=crop&w=800&q=80'
   },
   {
     value: RoomStyle.Transitional,
@@ -173,7 +174,7 @@ export const ROOM_STYLES: { value: RoomStyle; label: string; description: string
     value: RoomStyle.Steampunk,
     label: 'Steampunk',
     description: 'Victorian-era industrialism with gears, brass, and dark leather.',
-    image: 'https://images.unsplash.com/photo-1550949221-5f048e9a2c3a?auto=format&fit=crop&w=800&q=80'
+    image: 'https://images.unsplash.com/photo-1554295405-abb8fd54f153?auto=format&fit=crop&w=1200&q=80'
   },
   {
     value: RoomStyle.Memphis,
@@ -181,16 +182,16 @@ export const ROOM_STYLES: { value: RoomStyle; label: string; description: string
     description: 'Bold pop art, geometric shapes, and bright primary colors.',
     image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=800&q=80'
   },
-  {
-    value: RoomStyle.Brutalism,
-    label: 'Brutalism',
+  { 
+    value: RoomStyle.Brutalism, 
+    label: 'Brutalism', 
     description: 'Raw concrete, blocky shapes, and monochromatic gray.',
-    image: 'https://images.unsplash.com/photo-1518112390430-f4ab02e9c2c8?auto=format&fit=crop&w=800&q=80'
+    image: 'https://images.unsplash.com/photo-1518112390430-f4ab02e9c2c8?auto=format&fit=crop&w=800&q=80' 
   },
-  {
-    value: RoomStyle.ArtNouveau,
-    label: 'Art Nouveau',
+  { 
+    value: RoomStyle.ArtNouveau, 
+    label: 'Art Nouveau', 
     description: 'Flowing lines, organic shapes, and floral motifs.',
-    image: 'https://images.unsplash.com/photo-1555529733-0e670560f7e1?auto=format&fit=crop&w=800&q=80'
+    image: 'https://images.unsplash.com/photo-1555529733-0e670560f7e1?auto=format&fit=crop&w=800&q=80' 
   }
 ];

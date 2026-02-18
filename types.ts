@@ -1,3 +1,4 @@
+
 export enum RoomStyle {
   Modern = 'Modern',
   Minimalist = 'Minimalist',
@@ -86,6 +87,7 @@ export interface DesignerItem {
   rotation: number;
   locked?: boolean;
   groupId?: string;
+  color?: string;
 }
 
 export interface SavedDesign {

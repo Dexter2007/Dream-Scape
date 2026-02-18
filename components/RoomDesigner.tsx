@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ImageUpload } from './ImageUpload';
 import { DesignerItem, SavedDesign } from '../types';
@@ -22,6 +23,12 @@ const FURNITURE_ITEMS = [
   { type: 'Toilet', icon: '🚽' },
   { type: 'Shower', icon: '🚿' },
   { type: 'Bathtub', icon: '🛁' },
+];
+
+const SHAPE_ITEMS = [
+  { type: 'Square', icon: '■' },
+  { type: 'Circle', icon: '●' },
+  { type: 'Triangle', icon: '▲' },
 ];
 
 const TEMPLATES = [
@@ -186,7 +193,8 @@ export const RoomDesigner: React.FC = () => {
       y: 50,
       scale: 1,
       rotation: 0,
-      locked: false
+      locked: false,
+      color: SHAPE_ITEMS.some(s => s.type === type) ? '#5e5e5e' : undefined
     };
     
     setItems([...items, newItem]);
@@ -585,6 +593,33 @@ export const RoomDesigner: React.FC = () => {
                  </button>
                )}
 
+                {/* Color Picker */}
+                <div className="space-y-1 pt-2 border-t border-slate-100">
+                   <div className="flex justify-between text-xs text-slate-500">
+                     <span>Color / Tint</span>
+                     {!isMultiSelect && <span className="uppercase text-[10px]">{selectedItems[0].color || 'None'}</span>}
+                   </div>
+                   <div className="flex items-center gap-2">
+                     <div className="relative w-full h-8 rounded-lg overflow-hidden border border-slate-200">
+                       <input
+                         type="color"
+                         value={(!isMultiSelect ? selectedItems[0].color : '#000000') || '#000000'}
+                         onChange={(e) => updateSelectedItems({ color: e.target.value })}
+                         className="absolute -top-[50%] -left-[50%] w-[200%] h-[200%] cursor-pointer p-0 m-0 border-0"
+                       />
+                     </div>
+                     <button
+                       onClick={() => updateSelectedItems({ color: undefined })}
+                       className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
+                       title="Reset Color"
+                     >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                          <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
+                        </svg>
+                     </button>
+                   </div>
+                </div>
+
                {/* Common Controls (Scale/Rotate - applies to all selected) */}
                <div className="space-y-1">
                  <div className="flex justify-between text-xs text-slate-500">
@@ -594,7 +629,7 @@ export const RoomDesigner: React.FC = () => {
                  <input 
                    type="range" 
                    min="0.2" 
-                   max="3" 
+                   max="5" 
                    step="0.1"
                    disabled={selectedItems.some(i => i.locked)}
                    value={!isMultiSelect ? selectedItems[0].scale : 1}
@@ -650,17 +685,41 @@ export const RoomDesigner: React.FC = () => {
         {/* Item Library */}
         <div className="flex-grow bg-white p-4 rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           <h3 className="font-bold text-slate-900 mb-3">Add Items</h3>
-          <div className="grid grid-cols-4 gap-2 overflow-y-auto pr-1">
-            {FURNITURE_ITEMS.map((item) => (
-              <button
-                key={item.type}
-                onClick={() => handleAddItem(item.icon, item.type)}
-                className="aspect-square flex items-center justify-center text-2xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-lg transition-colors"
-                title={item.type}
-              >
-                {item.icon}
-              </button>
-            ))}
+          
+          <div className="flex-grow overflow-y-auto pr-1 space-y-4 custom-scrollbar">
+             {/* Furniture Section */}
+             <div>
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Furniture</h4>
+                <div className="grid grid-cols-4 gap-2">
+                  {FURNITURE_ITEMS.map((item) => (
+                    <button
+                      key={item.type}
+                      onClick={() => handleAddItem(item.icon, item.type)}
+                      className="aspect-square flex items-center justify-center text-2xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-lg transition-colors"
+                      title={item.type}
+                    >
+                      {item.icon}
+                    </button>
+                  ))}
+                </div>
+             </div>
+
+             {/* Shapes Section */}
+             <div>
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Shapes & Walls</h4>
+                <div className="grid grid-cols-4 gap-2">
+                  {SHAPE_ITEMS.map((item) => (
+                    <button
+                      key={item.type}
+                      onClick={() => handleAddItem(item.icon, item.type)}
+                      className="aspect-square flex items-center justify-center text-2xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-lg transition-colors text-slate-700"
+                      title={item.type}
+                    >
+                      {item.icon}
+                    </button>
+                  ))}
+                </div>
+             </div>
           </div>
         </div>
 
@@ -736,6 +795,11 @@ export const RoomDesigner: React.FC = () => {
               {/* Items Layer */}
               {items.map((item) => {
                 const isSelected = selectedItemIds.includes(item.id);
+                // Color Logic: 
+                // For Shapes (Simple text chars like ■), color property works.
+                // For Emojis, color doesn't work, so we use drop-shadow to tint/glow.
+                const isShape = SHAPE_ITEMS.some(s => s.type === item.type);
+                
                 return (
                   <div
                     key={item.id}
@@ -749,6 +813,9 @@ export const RoomDesigner: React.FC = () => {
                       top: `${item.y}%`,
                       transform: `translate(-50%, -50%) rotate(${item.rotation}deg) scale(${item.scale})`,
                       fontSize: `3rem`,
+                      color: item.color,
+                      filter: item.color && !isShape ? `drop-shadow(0 0 8px ${item.color})` : 'none',
+                      textShadow: item.color && isShape ? `0 0 2px ${item.color}` : 'none' // Smooth edges for shapes
                     }}
                   >
                     <div className={`relative px-1 ${isSelected && !item.locked ? '' : ''}`}>
