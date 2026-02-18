@@ -91,18 +91,27 @@ const App: React.FC = () => {
     setResult({ originalImage, generatedImage: null, advice: null }); 
 
     try {
-      setLoadingState({ isGenerating: true, statusMessage: 'Analyzing space & redesigning...' });
+      setLoadingState({ isGenerating: true, statusMessage: 'Analyzing space & consulting designers...' });
 
-      const [generatedImage, advice] = await Promise.all([
-        generateRoomRedesign(originalImage, selectedStyle),
-        getDesignAdvice(originalImage, selectedStyle)
-      ]);
+      // Run calls in parallel but handle failures independently
+      const advicePromise = getDesignAdvice(originalImage, selectedStyle)
+        .then(advice => {
+          setResult(prev => prev ? { ...prev, advice } : null);
+          return advice;
+        })
+        .catch(err => {
+          console.error("Advice generation failed (non-fatal):", err);
+          return null;
+        });
 
-      setResult({
-        originalImage,
-        generatedImage,
-        advice
-      });
+      const imagePromise = generateRoomRedesign(originalImage, selectedStyle)
+        .then(img => {
+          setResult(prev => prev ? { ...prev, generatedImage: img } : null);
+          return img;
+        });
+
+      await Promise.all([advicePromise, imagePromise]);
+
     } catch (err: any) {
       console.error("Generation failed", err);
       setError(err.message || "Something went wrong. Please check your API key and try again.");

@@ -13,11 +13,35 @@ const getMimeType = (base64Data: string) => {
   return match ? match[1] : 'image/jpeg';
 };
 
+// Robust API Key Retrieval
+const getApiKey = (): string => {
+  // 1. Try process.env (Standard Node/Webpack/Shimmed environments)
+  try {
+    if (typeof process !== 'undefined' && process.env?.API_KEY) {
+      return process.env.API_KEY;
+    }
+  } catch(e) {}
+
+  // 2. Try Vite import.meta.env
+  try {
+    // @ts-ignore
+    if (import.meta?.env?.VITE_API_KEY) {
+      // @ts-ignore
+      return import.meta.env.VITE_API_KEY;
+    }
+  } catch(e) {}
+
+  return '';
+};
+
 export const generateRoomRedesign = async (
   base64Image: string,
   style: string
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key is missing. Please check your .env file.");
+  
+  const ai = new GoogleGenAI({ apiKey });
   const modelId = 'gemini-2.5-flash-image';
   
   const prompt = `
@@ -74,7 +98,10 @@ export const getDesignAdvice = async (
   base64Image: string,
   style: string
 ): Promise<DesignAdvice> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key is missing.");
+
+  const ai = new GoogleGenAI({ apiKey });
   const modelId = 'gemini-3-flash-preview';
 
   const prompt = `
