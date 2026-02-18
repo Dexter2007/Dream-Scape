@@ -86,12 +86,58 @@ async function cropImage(base64Image: string, box: number[]): Promise<string> {
   });
 }
 
+// Helper to resize image if too large (max dimension 1536px)
+// This significantly reduces payload size and helps avoid "Resource Exhausted" errors
+const resizeImage = (base64Str: string, maxDimension = 1536): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = base64Str;
+    img.onload = () => {
+      let w = img.width;
+      let h = img.height;
+      
+      // If image is small enough, return original
+      if (w <= maxDimension && h <= maxDimension) {
+        resolve(base64Str);
+        return;
+      }
+
+      // Calculate new dimensions
+      if (w > h) {
+        if (w > maxDimension) {
+          h = Math.round(h * (maxDimension / w));
+          w = maxDimension;
+        }
+      } else {
+        if (h > maxDimension) {
+          w = Math.round(w * (maxDimension / h));
+          h = maxDimension;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, w, h);
+        // Return as JPEG with 0.85 quality to save bandwidth
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      } else {
+        resolve(base64Str);
+      }
+    };
+    img.onerror = () => resolve(base64Str);
+  });
+};
+
 // Retry wrapper for API calls with Aggressive Backoff and Status Updates
 async function retryOperation<T>(
   operation: () => Promise<T>, 
   onStatusUpdate?: (msg: string) => void,
-  retries = 5, 
-  initialDelay = 2000
+  retries = 6, 
+  initialDelay = 3000
 ): Promise<T> {
   let delay = initialDelay;
   
@@ -126,7 +172,7 @@ async function retryOperation<T>(
         await wait(currentDelay);
         
         // Increase delay for next attempt
-        delay *= 2; 
+        delay *= 1.5; // Slightly gentler backoff factor to avoid extremely long waits at the end
         continue;
       }
 
@@ -164,9 +210,13 @@ export const generateRoomRedesign = async (
     Return only the generated image.
   `;
 
+  // Optimize image size before sending
+  if (onStatusUpdate) onStatusUpdate("Optimizing image...");
+  const optimizedImage = await resizeImage(base64Image);
+
   try {
     return await retryOperation(async () => {
-      const mimeType = getMimeType(base64Image);
+      const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
         contents: {
@@ -174,7 +224,7 @@ export const generateRoomRedesign = async (
             {
               inlineData: {
                 mimeType: mimeType,
-                data: cleanBase64(base64Image)
+                data: cleanBase64(optimizedImage)
               }
             },
             { text: prompt }
@@ -192,7 +242,7 @@ export const generateRoomRedesign = async (
         }
       }
       throw new Error("No image generated in response.");
-    }, onStatusUpdate);
+    }, onStatusUpdate, 6, 3000); // 6 retries starting at 3s delay
   } catch (error: any) {
     console.error("Redesign error:", error);
     
@@ -206,8 +256,8 @@ export const generateRoomRedesign = async (
       throw new Error("Invalid API Key. Please check your .env file.");
     }
     
-    if (error.status === 429 || msg.includes('429') || msg.includes('exhausted')) {
-       throw new Error("System is currently at maximum capacity (Rate Limit). Please wait 1-2 minutes and try again.");
+    if (error.status === 429 || msg.includes('429') || msg.includes('exhausted') || msg.includes('quota')) {
+       throw new Error("System is busy (Rate Limit). We retried several times, but the server is still busy. Please wait 1 minute.");
     }
     
     throw error;
@@ -229,10 +279,13 @@ export const getDesignAdvice = async (
     Analyze this room image for a '${style}' style redesign.
     Provide professional interior design advice in JSON format.
   `;
+  
+  // Use optimized image for advice as well to save bandwidth
+  const optimizedImage = await resizeImage(base64Image, 1024);
 
   try {
     return await retryOperation(async () => {
-      const mimeType = getMimeType(base64Image);
+      const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
         contents: {
@@ -240,7 +293,7 @@ export const getDesignAdvice = async (
             {
               inlineData: {
                 mimeType: mimeType,
-                data: cleanBase64(base64Image)
+                data: cleanBase64(optimizedImage)
               }
             },
             { text: prompt }
@@ -285,7 +338,7 @@ export const getDesignAdvice = async (
 
       const jsonText = response.text || "{}";
       return JSON.parse(jsonText) as DesignAdvice;
-    }, onStatusUpdate, 3, 5000); // Specific settings for advice (fewer retries, 5s delay)
+    }, onStatusUpdate, 3, 5000); // Keep advice retries lower to avoid holding up UI too long
   } catch (error: any) {
     console.error("Advice error:", error);
     // Silent fail for advice is handled in UI, but we throw here to let UI know
@@ -317,15 +370,18 @@ export const generateShopTheLook = async (
        - query: A google shopping search query string for this item.
        - box_2d: A bounding box [ymin, xmin, ymax, xmax] of the item in the image using a 0-1000 normalized scale.
   `;
+  
+  // Use optimized image
+  const optimizedImage = await resizeImage(base64Image, 1024);
 
   try {
     return await retryOperation(async () => {
-      const mimeType = getMimeType(base64Image);
+      const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
         contents: {
           parts: [
-            { inlineData: { mimeType, data: cleanBase64(base64Image) } },
+            { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
             { text: prompt }
           ]
         },
@@ -368,8 +424,9 @@ export const generateShopTheLook = async (
       const productsWithImages = await Promise.all((data.products || []).map(async (p: any, idx: number) => {
         let imageUrl = '';
         if (p.box_2d && p.box_2d.length === 4) {
-             // Crop the image using the bounding box
-             imageUrl = await cropImage(base64Image, p.box_2d);
+             // Crop the image using the bounding box from the optimized image
+             // Note: cropImage re-loads the image, we should use optimizedImage for consistency
+             imageUrl = await cropImage(optimizedImage, p.box_2d);
         }
         
         return {
@@ -387,7 +444,7 @@ export const generateShopTheLook = async (
         title: data.title || "Custom Collection",
         style: data.style || "Modern",
         description: data.description || "A curated collection based on your image.",
-        image: base64Image,
+        image: base64Image, // Keep original for display
         products: productsWithImages
       } as LookCollection;
     }, onStatusUpdate, 3, 5000);
