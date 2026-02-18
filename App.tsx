@@ -86,31 +86,34 @@ const App: React.FC = () => {
   const handleGenerate = async () => {
     if (!originalImage) return;
 
-    setLoadingState({ isGenerating: true, statusMessage: 'Dreaming up your new room...' });
+    setLoadingState({ isGenerating: true, statusMessage: 'Preparing your design...' });
     setError(null);
     setResult({ originalImage, generatedImage: null, advice: null }); 
 
     try {
-      setLoadingState({ isGenerating: true, statusMessage: 'Analyzing space & consulting designers...' });
+      // 1. Generate Image First (High Priority)
+      setLoadingState({ isGenerating: true, statusMessage: 'Dreaming up your new room (10-15s)...' });
+      const generatedImg = await generateRoomRedesign(originalImage, selectedStyle);
+      
+      // Update result with image immediately
+      setResult(prev => ({ 
+        originalImage, 
+        generatedImage: generatedImg, 
+        advice: null 
+      }));
 
-      // Run calls in parallel but handle failures independently
-      const advicePromise = getDesignAdvice(originalImage, selectedStyle)
-        .then(advice => {
-          setResult(prev => prev ? { ...prev, advice } : null);
-          return advice;
-        })
-        .catch(err => {
-          console.error("Advice generation failed (non-fatal):", err);
-          return null;
-        });
-
-      const imagePromise = generateRoomRedesign(originalImage, selectedStyle)
-        .then(img => {
-          setResult(prev => prev ? { ...prev, generatedImage: img } : null);
-          return img;
-        });
-
-      await Promise.all([advicePromise, imagePromise]);
+      // 2. Generate Advice Second (Low Priority)
+      setLoadingState({ isGenerating: true, statusMessage: 'Consulting interior designers...' });
+      
+      try {
+        // Small delay to be gentle on rate limits
+        await new Promise(r => setTimeout(r, 500));
+        const advice = await getDesignAdvice(originalImage, selectedStyle);
+        setResult(prev => prev ? { ...prev, advice } : null);
+      } catch (adviceErr) {
+        console.warn("Advice generation skipped:", adviceErr);
+        // Don't fail the entire process if advice fails, just log it
+      }
 
     } catch (err: any) {
       console.error("Generation failed", err);
@@ -371,7 +374,7 @@ const App: React.FC = () => {
 
                      {/* Advice Area */}
                      <div className="lg:col-span-1 h-full min-h-[500px]">
-                        {loadingState.isGenerating ? (
+                        {loadingState.isGenerating && !result?.generatedImage ? (
                           <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/50 p-8 h-full flex flex-col gap-8 animate-pulse">
                              <div className="h-8 bg-slate-100 rounded-lg w-1/2"></div>
                              <div className="space-y-3">
@@ -383,7 +386,24 @@ const App: React.FC = () => {
                           </div>
                         ) : result?.advice ? (
                           <AdvicePanel advice={result.advice} />
-                        ) : null}
+                        ) : (
+                          // Placeholder when advice is missing or failed (but image exists)
+                          <div className="bg-white/50 backdrop-blur-sm rounded-3xl border border-slate-200 p-8 h-full flex flex-col items-center justify-center text-center text-slate-400">
+                             {loadingState.isGenerating ? (
+                               <>
+                                 <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                                 <p className="text-sm">Creating design plan...</p>
+                               </>
+                             ) : (
+                               <>
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 mb-2 opacity-50">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3.001.516.243.571.376 1.199.376 1.864 0 2.472-1.892 4.477-4.225 4.477V8.5a6.5 6.5 0 1 1 13 0v2.107a2.25 2.25 0 0 1-2.25 2.25h-.375a2.25 2.25 0 0 0 0 4.5h.375v.001M12 6.042c1.94 0 3.73.612 5.207 1.666" />
+                                  </svg>
+                                  <p className="text-sm">Design advice not available for this run.</p>
+                               </>
+                             )}
+                          </div>
+                        )}
                      </div>
                    </div>
                 )}

@@ -96,6 +96,14 @@ export const generateRoomRedesign = async (
       throw new Error("Your API Key has been revoked by Google because it was exposed. Please generate a new key at aistudio.google.com.");
     }
     
+    if (error.status === 429) {
+       throw new Error("Too many requests! Please wait 30 seconds and try again.");
+    }
+    
+    if (error.status === 503) {
+       throw new Error("Google AI service is currently overloaded. Please try again in a moment.");
+    }
+    
     throw error;
   }
 };
@@ -174,6 +182,10 @@ export const getDesignAdvice = async (
     
     if (error.status === 403 || (error.message && error.message.includes('leaked'))) {
       throw new Error("API Key Revoked/Leaked. Please generate a new one.");
+    }
+
+    if (error.status === 429) {
+       throw new Error("Too many requests! Please wait 30 seconds and try again.");
     }
     
     throw error;
