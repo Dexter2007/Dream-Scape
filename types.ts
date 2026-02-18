@@ -65,12 +65,14 @@ export interface ProductItem {
   name: string;
   price: number;
   image: string;
+  query?: string;
+  category?: string;
 }
 
 export interface LookCollection {
   id: string;
   title: string;
-  style: RoomStyle;
+  style: RoomStyle | string;
   description: string;
   image: string;
   products: ProductItem[];

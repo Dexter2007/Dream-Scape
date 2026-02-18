@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { RoomStyle } from '../types';
 import { ROOM_STYLES } from '../constants';
@@ -159,7 +160,7 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
 
   const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
 
-  if (questions.length === 0) return <div className="p-8 text-center">Loading quiz...</div>;
+  if (questions.length === 0) return <div className="p-8 text-center text-slate-600 dark:text-slate-400">Loading quiz...</div>;
 
   if (result) {
     // Check if result exists in presets
@@ -170,7 +171,7 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
 
     return (
       <div className="max-w-2xl mx-auto py-12 px-4 animate-fade-in-up">
-        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden text-center">
+        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden text-center transition-colors">
           <div className="h-64 relative group">
              <img 
                src={displayImage} 
@@ -189,11 +190,11 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
                 </h2>
              </div>
           </div>
-          <div className="p-10 space-y-8 bg-white relative">
+          <div className="p-10 space-y-8 bg-white dark:bg-slate-800 relative transition-colors">
             <div className="space-y-4">
-              <h3 className="text-2xl font-bold text-slate-900">Your preferred style is {result}</h3>
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Your preferred style is {result}</h3>
               <div className="w-12 h-1 bg-indigo-600 mx-auto rounded-full"></div>
-              <p className="text-slate-600 text-lg leading-relaxed max-w-lg mx-auto">
+              <p className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed max-w-lg mx-auto">
                 {description}
               </p>
             </div>
@@ -201,7 +202,7 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
             <div className="pt-2">
               <button
                 onClick={() => onComplete(result)}
-                className="px-10 py-4 bg-slate-900 text-white rounded-full font-bold text-lg hover:bg-indigo-600 transition-all shadow-xl hover:shadow-indigo-500/30 transform hover:-translate-y-1 flex items-center justify-center gap-3 mx-auto"
+                className="px-10 py-4 bg-slate-900 dark:bg-indigo-600 text-white rounded-full font-bold text-lg hover:bg-indigo-600 dark:hover:bg-indigo-500 transition-all shadow-xl hover:shadow-indigo-500/30 transform hover:-translate-y-1 flex items-center justify-center gap-3 mx-auto"
               >
                 <span>Design with this Style</span>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
@@ -210,7 +211,7 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
               </button>
               <button 
                 onClick={initializeQuiz}
-                className="mt-6 text-slate-400 hover:text-slate-600 text-sm font-medium"
+                className="mt-6 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-sm font-medium transition-colors"
               >
                 Retake Quiz
               </button>
@@ -225,13 +226,13 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
 
   return (
     <div className="max-w-2xl mx-auto py-12 px-4 animate-fade-in-up">
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8 transition-colors">
         <div className="mb-8">
           <div className="flex justify-between items-end mb-2">
-            <h2 className="text-2xl font-bold text-slate-900">Find Your Style</h2>
-            <span className="text-sm font-medium text-slate-500">Question {currentQuestionIndex + 1} of {questions.length}</span>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Find Your Style</h2>
+            <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Question {currentQuestionIndex + 1} of {questions.length}</span>
           </div>
-          <div className="w-full bg-slate-100 rounded-full h-2">
+          <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2">
             <div 
               className="bg-indigo-600 h-2 rounded-full transition-all duration-500 ease-out"
               style={{ width: `${progress}%` }}
@@ -239,7 +240,7 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
           </div>
         </div>
 
-        <h3 className="text-xl font-medium text-slate-800 mb-6 min-h-[3rem]">
+        <h3 className="text-xl font-medium text-slate-800 dark:text-slate-100 mb-6 min-h-[3rem]">
           {currentQ.question}
         </h3>
 
@@ -248,10 +249,10 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
             <button
               key={idx}
               onClick={() => handleOptionSelect(option.style)}
-              className="w-full text-left p-4 rounded-xl border-2 border-slate-100 hover:border-indigo-600 hover:bg-indigo-50 transition-all duration-200 group flex items-center justify-between"
+              className="w-full text-left p-4 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-indigo-600 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all duration-200 group flex items-center justify-between"
             >
-              <span className="text-slate-700 font-medium group-hover:text-indigo-900 text-lg">{option.text}</span>
-              <div className="w-6 h-6 rounded-full border-2 border-slate-300 group-hover:border-indigo-600 flex items-center justify-center">
+              <span className="text-slate-700 dark:text-slate-200 font-medium group-hover:text-indigo-900 dark:group-hover:text-indigo-300 text-lg">{option.text}</span>
+              <div className="w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-600 group-hover:border-indigo-600 dark:group-hover:border-indigo-500 flex items-center justify-center">
                  <div className="w-3 h-3 rounded-full bg-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
             </button>

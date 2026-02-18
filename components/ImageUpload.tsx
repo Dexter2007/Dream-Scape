@@ -1,3 +1,4 @@
+
 import React, { useRef, useState } from 'react';
 
 interface ImageUploadProps {
@@ -51,10 +52,10 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ onImageSelected }) => 
   return (
     <div className="w-full max-w-2xl mx-auto">
       <div
-        className={`relative border border-dashed rounded-3xl p-16 text-center transition-all duration-500 ease-out cursor-pointer group overflow-hidden
+        className={`relative border-2 border-dashed rounded-[2rem] p-16 text-center transition-all duration-500 ease-out cursor-pointer group overflow-hidden glass
           ${isDragging 
-            ? 'border-indigo-500 bg-indigo-50/50 scale-[1.01]' 
-            : 'border-slate-300 bg-white/60 hover:border-indigo-400 hover:bg-white/80 hover:shadow-xl hover:shadow-indigo-500/10'
+            ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/30 scale-[1.02] shadow-2xl' 
+            : 'border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-2xl hover:shadow-indigo-500/10'
           }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -70,23 +71,23 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ onImageSelected }) => 
         />
         
         {/* Decorative background blob */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-gradient-to-tr from-indigo-100 to-purple-100 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-gradient-to-tr from-indigo-200 to-purple-200 dark:from-indigo-900/40 dark:to-purple-900/40 rounded-full blur-[80px] opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none animate-pulse-slow"></div>
 
-        <div className="relative flex flex-col items-center gap-6">
-          <div className="w-20 h-20 bg-white shadow-lg shadow-slate-200/50 text-indigo-600 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 duration-500 border border-slate-50">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-10 h-10">
+        <div className="relative flex flex-col items-center gap-6 z-10">
+          <div className="w-20 h-20 bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 group-hover:-translate-y-2 duration-500 border border-slate-100 dark:border-slate-700 animate-float">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
             </svg>
           </div>
           <div className="space-y-2">
-            <h3 className="text-2xl font-serif font-bold text-slate-900">Upload your room photo</h3>
-            <p className="text-slate-500 font-light">Drag and drop or click to browse</p>
+            <h3 className="text-2xl font-serif font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Upload your room photo</h3>
+            <p className="text-slate-500 dark:text-slate-400 font-light group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors">Drag and drop or click to browse</p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-wider font-medium bg-slate-100 px-3 py-1 rounded-full">
+          <div className="flex items-center gap-2 text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-bold bg-slate-100/50 dark:bg-slate-800/50 px-4 py-1.5 rounded-full border border-slate-200 dark:border-slate-700/50">
             <span>JPG</span>
-            <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+            <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
             <span>PNG</span>
-            <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+            <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
             <span>Max 10MB</span>
           </div>
         </div>

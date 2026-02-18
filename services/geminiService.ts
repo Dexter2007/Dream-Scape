@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { DesignAdvice } from "../types";
+import { DesignAdvice, LookCollection } from "../types";
 
 // Helper to clean base64 string
 const cleanBase64 = (base64Data: string) => {
@@ -45,6 +45,46 @@ const getApiKey = (): string | undefined => {
 
 // Helper for delays
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Helper to crop image from bounding box
+async function cropImage(base64Image: string, box: number[]): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      // box is [ymin, xmin, ymax, xmax] on 0-1000 scale
+      const [ymin, xmin, ymax, xmax] = box;
+      
+      const width = img.width;
+      const height = img.height;
+      
+      const x = (xmin / 1000) * width;
+      const y = (ymin / 1000) * height;
+      const w = ((xmax - xmin) / 1000) * width;
+      const h = ((ymax - ymin) / 1000) * height;
+
+      // Ensure dimensions are valid
+      if (w <= 0 || h <= 0) {
+        resolve('');
+        return;
+      }
+
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Draw the cropped portion
+        ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      } else {
+        resolve('');
+      }
+    };
+    img.onerror = () => resolve('');
+    img.src = base64Image;
+  });
+}
 
 // Retry wrapper for API calls with Aggressive Backoff and Status Updates
 async function retryOperation<T>(
@@ -238,6 +278,110 @@ export const getDesignAdvice = async (
   } catch (error: any) {
     console.error("Advice error:", error);
     // Silent fail for advice is handled in UI, but we throw here to let UI know
+    throw error;
+  }
+};
+
+export const generateShopTheLook = async (
+  base64Image: string,
+  onStatusUpdate?: (msg: string) => void
+): Promise<LookCollection> => {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key missing.");
+
+  const ai = new GoogleGenAI({ apiKey });
+  const modelId = 'gemini-3-flash-preview';
+
+  const prompt = `
+    Analyze this room image and identify the key furniture and decor products that make up this look.
+    Return a JSON object with:
+    1. title: A catchy title for this room design (e.g. "Minimalist Zen", "Boho Chic Living").
+    2. style: The closest matching design style (e.g. Modern, Bohemian, Industrial, Minimalist, etc.).
+    3. description: A sophisticated, short description of the room's aesthetic and key elements.
+    4. products: A list of 4 to 8 distinct items found in the image.
+       For each product include:
+       - name: A specific, searchable product name (e.g. "Cognac Leather Sectional", "Brass Arc Floor Lamp").
+       - price: An estimated price in USD (integer).
+       - category: One of 'Furniture', 'Lighting', 'Decor', 'Rug', 'Art', 'Plant'.
+       - query: A google shopping search query string for this item.
+       - box_2d: A bounding box [ymin, xmin, ymax, xmax] of the item in the image using a 0-1000 normalized scale.
+  `;
+
+  try {
+    return await retryOperation(async () => {
+      const mimeType = getMimeType(base64Image);
+      const response = await ai.models.generateContent({
+        model: modelId,
+        contents: {
+          parts: [
+            { inlineData: { mimeType, data: cleanBase64(base64Image) } },
+            { text: prompt }
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              style: { type: Type.STRING },
+              description: { type: Type.STRING },
+              products: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    price: { type: Type.NUMBER },
+                    category: { type: Type.STRING },
+                    query: { type: Type.STRING },
+                    box_2d: { 
+                      type: Type.ARRAY, 
+                      items: { type: Type.NUMBER },
+                      description: "Bounding box [ymin, xmin, ymax, xmax] in 0-1000 coordinates"
+                    }
+                  },
+                  required: ["name", "price", "category", "query", "box_2d"]
+                }
+              }
+            },
+            required: ["title", "style", "description", "products"]
+          }
+        }
+      });
+
+      const jsonText = response.text || "{}";
+      const data = JSON.parse(jsonText);
+      
+      // Transform to LookCollection structure
+      const productsWithImages = await Promise.all((data.products || []).map(async (p: any, idx: number) => {
+        let imageUrl = '';
+        if (p.box_2d && p.box_2d.length === 4) {
+             // Crop the image using the bounding box
+             imageUrl = await cropImage(base64Image, p.box_2d);
+        }
+        
+        return {
+          id: `gen-${idx}`,
+          name: p.name,
+          price: p.price,
+          image: imageUrl, 
+          query: p.query || p.name,
+          category: p.category
+        };
+      }));
+
+      return {
+        id: Date.now().toString(),
+        title: data.title || "Custom Collection",
+        style: data.style || "Modern",
+        description: data.description || "A curated collection based on your image.",
+        image: base64Image,
+        products: productsWithImages
+      } as LookCollection;
+    }, onStatusUpdate);
+  } catch (error: any) {
+    console.error("Shop The Look error:", error);
     throw error;
   }
 };
