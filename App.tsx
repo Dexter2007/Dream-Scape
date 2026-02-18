@@ -17,6 +17,20 @@ import { ROOM_STYLES } from './constants';
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>('redesign');
   
+  // Theme State
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Toggle Dark Mode Class
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+
   // AI Redesign State
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<string>(RoomStyle.Modern);
@@ -142,8 +156,8 @@ const App: React.FC = () => {
       setLoadingState({ isGenerating: true, statusMessage: 'Consulting interior designers...' });
       
       try {
-        // Wait 10 seconds to significantly reduce chance of Rate Limit
-        await new Promise(r => setTimeout(r, 10000));
+        // Wait 15 seconds to significantly reduce chance of Rate Limit
+        await new Promise(r => setTimeout(r, 15000));
         
         const advice = await getDesignAdvice(
           originalImage, 
@@ -191,51 +205,51 @@ const App: React.FC = () => {
               <div className="relative animate-fade-in-up">
                 <div className="text-center max-w-5xl mx-auto py-24 md:py-32 px-4 relative z-10">
                   
-                  <h1 className="text-6xl md:text-8xl font-bold tracking-tight text-slate-900 mb-8 font-serif leading-tight">
+                  <h1 className="text-6xl md:text-8xl font-bold tracking-tight text-slate-900 dark:text-white mb-8 font-serif leading-tight">
                     Redesign your <br/>
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 drop-shadow-sm">
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 drop-shadow-sm">
                       sanctuary.
                     </span>
                   </h1>
                   
-                  <p className="text-xl md:text-2xl text-slate-600 mb-12 font-light leading-relaxed max-w-2xl mx-auto">
+                  <p className="text-xl md:text-2xl text-slate-600 dark:text-slate-300 mb-12 font-light leading-relaxed max-w-2xl mx-auto">
                     Experience the future of interior design. Upload a photo, curate your style, and watch your space transform instantly.
                   </p>
 
-                  <div className="max-w-xl mx-auto bg-white/60 backdrop-blur-md p-2 rounded-3xl shadow-2xl shadow-indigo-200/40 border border-white/60 transform hover:scale-[1.01] transition-transform duration-300 ring-1 ring-white/60">
+                  <div className="max-w-xl mx-auto bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-2 rounded-3xl shadow-2xl shadow-indigo-200/40 dark:shadow-indigo-900/20 border border-white/60 dark:border-slate-700/60 transform hover:scale-[1.01] transition-transform duration-300 ring-1 ring-white/60 dark:ring-slate-700/60">
                     <ImageUpload onImageSelected={setOriginalImage} />
                   </div>
 
                   {/* Feature Grid */}
                   <div className="grid md:grid-cols-3 gap-8 mt-24 text-left">
-                    <div className="bg-white/60 backdrop-blur-md p-8 rounded-2xl border border-white/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
-                      <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
+                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
+                      <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
                         🎨
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-2">15+ Design Styles</h3>
-                      <p className="text-slate-600">From Japandi to Cyberpunk, explore a diverse range of aesthetic transformations.</p>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">15+ Design Styles</h3>
+                      <p className="text-slate-600 dark:text-slate-400">From Japandi to Cyberpunk, explore a diverse range of aesthetic transformations.</p>
                     </div>
-                    <div className="bg-white/60 backdrop-blur-md p-8 rounded-2xl border border-white/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
-                       <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
+                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
+                       <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
                         💡
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-2">Expert Advice</h3>
-                      <p className="text-slate-600">Get actionable critiques, color palettes, and furniture suggestions.</p>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Expert Advice</h3>
+                      <p className="text-slate-600 dark:text-slate-400">Get actionable critiques, color palettes, and furniture suggestions.</p>
                     </div>
-                    <div className="bg-white/60 backdrop-blur-md p-8 rounded-2xl border border-white/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
-                       <div className="w-12 h-12 bg-pink-50 text-pink-600 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
+                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
+                       <div className="w-12 h-12 bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
                         ⚡
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-2">Instant Rendering</h3>
-                      <p className="text-slate-600">Visualize your new room in seconds with state-of-the-art Generative AI.</p>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Instant Rendering</h3>
+                      <p className="text-slate-600 dark:text-slate-400">Visualize your new room in seconds with state-of-the-art Generative AI.</p>
                     </div>
                   </div>
 
                   {/* Style Marquee */}
                   <div className="mt-24">
                      <div className="flex justify-between items-end mb-8">
-                        <h2 className="text-3xl font-bold font-serif text-slate-900">Trending Styles</h2>
-                        <button onClick={() => setCurrentView('quiz')} className="text-indigo-600 font-medium hover:text-indigo-800 flex items-center gap-1 group">
+                        <h2 className="text-3xl font-bold font-serif text-slate-900 dark:text-white">Trending Styles</h2>
+                        <button onClick={() => setCurrentView('quiz')} className="text-indigo-600 dark:text-indigo-400 font-medium hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center gap-1 group">
                            Take the Style Quiz <span className="text-lg group-hover:translate-x-1 transition-transform">→</span>
                         </button>
                      </div>
@@ -288,10 +302,10 @@ const App: React.FC = () => {
             {originalImage && (
               <div className="space-y-8 animate-fade-in-up pt-12">
                 {/* Control Bar */}
-                <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-xl shadow-indigo-100/50 border border-white/50">
+                <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 shadow-xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-700/50">
                   <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className="w-20 h-20 rounded-2xl overflow-hidden relative group cursor-pointer shadow-md ring-4 ring-white" onClick={handleReset}>
+                      <div className="w-20 h-20 rounded-2xl overflow-hidden relative group cursor-pointer shadow-md ring-4 ring-white dark:ring-slate-700" onClick={handleReset}>
                          <img src={originalImage} alt="Original" className="w-full h-full object-cover" />
                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6 text-white">
@@ -300,8 +314,8 @@ const App: React.FC = () => {
                          </div>
                       </div>
                       <div>
-                        <h2 className="text-2xl font-bold text-slate-900 font-serif">Your Room</h2>
-                        <button onClick={handleReset} className="text-sm text-indigo-600 hover:text-indigo-700 font-medium hover:underline">
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white font-serif">Your Room</h2>
+                        <button onClick={handleReset} className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 font-medium hover:underline">
                           Select different photo
                         </button>
                       </div>
@@ -311,7 +325,7 @@ const App: React.FC = () => {
                       <button
                         onClick={handleGenerate}
                         disabled={loadingState.isGenerating}
-                        className="w-full md:w-auto px-10 py-4 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-medium rounded-full transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center gap-2"
+                        className="w-full md:w-auto px-10 py-4 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-medium rounded-full transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center gap-2"
                       >
                         {loadingState.isGenerating ? 'Designing...' : 'Generate New Design'}
                         {!loadingState.isGenerating && (
@@ -324,18 +338,18 @@ const App: React.FC = () => {
                   </div>
 
                   {/* Style Selector inside the control panel */}
-                  <div className="mt-8 pt-8 border-t border-slate-100/50">
+                  <div className="mt-8 pt-8 border-t border-slate-100/50 dark:border-slate-700/50">
                      {/* Show Active Custom Style if it's not in the predefined list */}
                      {!ROOM_STYLES.some(s => s.value === selectedStyle) && (
-                        <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center gap-3 animate-fade-in-up">
+                        <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl flex items-center gap-3 animate-fade-in-up">
                            <div className="bg-indigo-600 text-white p-2 rounded-lg">
                               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                                  <path d="M10 2a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 2ZM10 15a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 15ZM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 1.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM3.5 10a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3.5 10ZM14.25 10a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75ZM5.404 5.404a.75.75 0 0 1 1.06 0l1.06 1.06a.75.75 0 0 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06ZM12.47 12.47a.75.75 0 0 1 1.06 0l1.06 1.06a.75.75 0 1 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06ZM5.404 14.596a.75.75 0 0 1 0 1.06l-1.06 1.06a.75.75 0 1 1-1.06-1.06l1.06-1.06a.75.75 0 0 1 1.06 0ZM12.47 7.53a.75.75 0 0 1 0-1.06l1.06-1.06a.75.75 0 1 1 1.06 1.06l-1.06 1.06a.75.75 0 0 1-1.06 0Z" />
                               </svg>
                            </div>
                            <div>
-                              <p className="text-xs text-indigo-600 font-bold uppercase tracking-wider">Active Custom Style</p>
-                              <p className="font-serif text-xl font-bold text-slate-900">{selectedStyle}</p>
+                              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-wider">Active Custom Style</p>
+                              <p className="font-serif text-xl font-bold text-slate-900 dark:text-white">{selectedStyle}</p>
                            </div>
                         </div>
                      )}
@@ -343,13 +357,32 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Error Message */}
+                {/* Error Message Display */}
                 {error && (
-                  <div className="bg-red-50 border border-red-100 text-red-700 px-6 py-4 rounded-xl flex items-center gap-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 flex-shrink-0">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clipRule="evenodd" />
-                    </svg>
-                    {error}
+                  <div className={`
+                    border px-6 py-4 rounded-xl flex items-start gap-4 animate-fade-in-up shadow-sm
+                    ${error.includes('API Key') || error.includes('revoked') 
+                      ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-200' 
+                      : 'bg-red-50 border-red-100 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-200'
+                    }
+                  `}>
+                    <div className="flex-shrink-0 mt-0.5">
+                      {error.includes('API Key') || error.includes('revoked') ? (
+                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                           <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 0 0-5.25 5.25v3a3 3 0 0 0-3 3v6.75a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3v-6.75a3 3 0 0 0-3-3v-3c0-2.9-2.35-5.25-5.25-5.25Zm3.75 8.25v-3a3.75 3.75 0 1 0-7.5 0v3h7.5Z" clipRule="evenodd" />
+                         </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm mb-1">
+                        {error.includes('API Key') ? 'Setup Required' : 'Generation Failed'}
+                      </h3>
+                      <p className="text-sm opacity-90">{error}</p>
+                    </div>
                   </div>
                 )}
 
@@ -358,7 +391,7 @@ const App: React.FC = () => {
                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12">
                      {/* Images Area */}
                      <div className="lg:col-span-2 space-y-4">
-                        <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-indigo-100/50 border border-white/60 aspect-[4/3] bg-white group">
+                        <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-white/60 dark:border-slate-700 aspect-[4/3] bg-white dark:bg-slate-800 group">
                            {loadingState.isGenerating && <LoadingOverlay status={loadingState.statusMessage} />}
                            
                            {result?.generatedImage ? (
@@ -368,7 +401,7 @@ const App: React.FC = () => {
                                label="DreamSpace"
                              />
                            ) : (
-                             <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 bg-slate-50/50">
+                             <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 dark:text-slate-600 bg-slate-50/50 dark:bg-slate-900/50">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 mb-4 opacity-50">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
                                 </svg>
@@ -379,23 +412,23 @@ const App: React.FC = () => {
 
                         {/* Dedicated Download Section - Outside of the image */}
                         {result?.generatedImage && (
-                          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-6 animate-fade-in-up">
+                          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-6 animate-fade-in-up">
                             <div className="flex items-center gap-4">
-                              <div className="bg-green-100 p-3 rounded-full text-green-600 flex-shrink-0">
+                              <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded-full text-green-600 dark:text-green-400 flex-shrink-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
                                   <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l4.75-6.75Z" clipRule="evenodd" />
                                 </svg>
                               </div>
                               <div>
-                                <h3 className="text-slate-900 font-bold text-lg">Design Ready</h3>
-                                <p className="text-slate-500 text-sm">Download your new {selectedStyle.toLowerCase()} room design.</p>
+                                <h3 className="text-slate-900 dark:text-white font-bold text-lg">Design Ready</h3>
+                                <p className="text-slate-500 dark:text-slate-400 text-sm">Download your new {selectedStyle.toLowerCase()} room design.</p>
                               </div>
                             </div>
                             
                             <div className="w-full sm:w-auto relative" ref={dropdownRef}>
                               <button 
                                 onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold text-white bg-slate-900 border border-slate-900 rounded-xl hover:bg-indigo-600 hover:border-indigo-600 transition-all shadow-md focus:ring-2 focus:ring-indigo-200"
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold text-white bg-slate-900 dark:bg-indigo-600 border border-slate-900 dark:border-indigo-600 rounded-xl hover:bg-indigo-600 dark:hover:bg-indigo-500 hover:border-indigo-600 dark:hover:border-indigo-500 transition-all shadow-md focus:ring-2 focus:ring-indigo-200"
                               >
                                 <span>Download Design</span>
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 transition-transform duration-200 ${showDownloadMenu ? 'rotate-180' : ''}`}>
@@ -404,21 +437,21 @@ const App: React.FC = () => {
                               </button>
 
                               {showDownloadMenu && (
-                                <div className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-fade-in-up origin-bottom-right">
+                                <div className="absolute right-0 bottom-full mb-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden z-50 animate-fade-in-up origin-bottom-right">
                                   <button
                                     onClick={() => handleDownload('png')}
-                                    className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-between"
+                                    className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-600 dark:hover:text-white transition-colors flex items-center justify-between"
                                   >
                                     <span>Download PNG</span>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">HQ</span>
+                                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">HQ</span>
                                   </button>
-                                  <div className="h-px bg-slate-100"></div>
+                                  <div className="h-px bg-slate-100 dark:bg-slate-700"></div>
                                   <button
                                     onClick={() => handleDownload('jpeg')}
-                                    className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-between"
+                                    className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-600 dark:hover:text-white transition-colors flex items-center justify-between"
                                   >
                                     <span>Download JPEG</span>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">Lite</span>
+                                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">Lite</span>
                                   </button>
                                 </div>
                               )}
@@ -430,20 +463,20 @@ const App: React.FC = () => {
                      {/* Advice Area */}
                      <div className="lg:col-span-1 h-full min-h-[500px]">
                         {loadingState.isGenerating && !result?.generatedImage ? (
-                          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/50 p-8 h-full flex flex-col gap-8 animate-pulse">
-                             <div className="h-8 bg-slate-100 rounded-lg w-1/2"></div>
+                          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/50 dark:border-slate-700 p-8 h-full flex flex-col gap-8 animate-pulse">
+                             <div className="h-8 bg-slate-100 dark:bg-slate-700 rounded-lg w-1/2"></div>
                              <div className="space-y-3">
-                               <div className="h-4 bg-slate-100 rounded w-full"></div>
-                               <div className="h-4 bg-slate-100 rounded w-full"></div>
-                               <div className="h-4 bg-slate-100 rounded w-3/4"></div>
+                               <div className="h-4 bg-slate-100 dark:bg-slate-700 rounded w-full"></div>
+                               <div className="h-4 bg-slate-100 dark:bg-slate-700 rounded w-full"></div>
+                               <div className="h-4 bg-slate-100 dark:bg-slate-700 rounded w-3/4"></div>
                              </div>
-                             <div className="h-40 bg-slate-100 rounded-2xl w-full mt-auto"></div>
+                             <div className="h-40 bg-slate-100 dark:bg-slate-700 rounded-2xl w-full mt-auto"></div>
                           </div>
                         ) : result?.advice ? (
                           <AdvicePanel advice={result.advice} />
                         ) : (
                           // Placeholder when advice is missing or failed (but image exists)
-                          <div className="bg-white/50 backdrop-blur-sm rounded-3xl border border-slate-200 p-8 h-full flex flex-col items-center justify-center text-center text-slate-400">
+                          <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-3xl border border-slate-200 dark:border-slate-700 p-8 h-full flex flex-col items-center justify-center text-center text-slate-400 dark:text-slate-500">
                              {loadingState.isGenerating ? (
                                <>
                                  <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -470,23 +503,29 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col font-sans text-slate-900 relative selection:bg-indigo-100 selection:text-indigo-900 overflow-x-hidden">
+    <div className="min-h-screen flex flex-col font-sans text-slate-900 dark:text-slate-100 relative selection:bg-indigo-100 selection:text-indigo-900 dark:selection:bg-indigo-900 dark:selection:text-indigo-100 overflow-x-hidden transition-colors duration-300">
       
       {/* Global Background Elements */}
-      <div className="fixed inset-0 -z-10 h-full w-full bg-[#fafaf9]">
+      <div className="fixed inset-0 -z-10 h-full w-full bg-[#fafaf9] dark:bg-[#0f172a] transition-colors duration-300">
         {/* Dot Pattern Overlay */}
-        <div className="absolute inset-0 opacity-[0.3]" style={{ backgroundImage: 'radial-gradient(#a8a29e 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }}></div>
+        <div className="absolute inset-0 opacity-[0.3] dark:opacity-[0.1]" style={{ backgroundImage: 'radial-gradient(#a8a29e 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }}></div>
         
         {/* Rich Watercolor Meshes */}
-        <div className="absolute top-[-10%] right-[-5%] w-[700px] h-[700px] bg-gradient-to-br from-indigo-300/30 to-purple-300/30 rounded-full blur-[100px] pointer-events-none mix-blend-multiply animate-blob"></div>
-        <div className="absolute bottom-[-10%] left-[-10%] w-[700px] h-[700px] bg-gradient-to-tr from-rose-300/30 to-orange-200/30 rounded-full blur-[100px] pointer-events-none mix-blend-multiply animate-blob animation-delay-2000"></div>
-        <div className="absolute top-[20%] left-[20%] w-[600px] h-[600px] bg-gradient-to-r from-emerald-200/20 to-teal-200/20 rounded-full blur-[90px] pointer-events-none mix-blend-multiply animate-blob animation-delay-4000"></div>
+        <div className="absolute top-[-10%] right-[-5%] w-[700px] h-[700px] bg-gradient-to-br from-indigo-300/30 to-purple-300/30 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-full blur-[100px] pointer-events-none mix-blend-multiply dark:mix-blend-normal animate-blob"></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-[700px] h-[700px] bg-gradient-to-tr from-rose-300/30 to-orange-200/30 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-full blur-[100px] pointer-events-none mix-blend-multiply dark:mix-blend-normal animate-blob animation-delay-2000"></div>
+        <div className="absolute top-[20%] left-[20%] w-[600px] h-[600px] bg-gradient-to-r from-emerald-200/20 to-teal-200/20 dark:from-teal-900/10 dark:to-emerald-900/10 rounded-full blur-[90px] pointer-events-none mix-blend-multiply dark:mix-blend-normal animate-blob animation-delay-4000"></div>
 
         {/* Central Vignette */}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#fafaf9]/80 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#fafaf9]/80 dark:to-[#0f172a]/80 pointer-events-none transition-colors duration-300"></div>
       </div>
 
-      <Header currentView={currentView} onViewChange={setCurrentView} onHomeClick={handleGoHome} />
+      <Header 
+        currentView={currentView} 
+        onViewChange={setCurrentView} 
+        onHomeClick={handleGoHome}
+        isDarkMode={isDarkMode}
+        onToggleTheme={toggleTheme}
+      />
       <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-8 space-y-8 relative z-0">
         {renderContent()}
       </main>

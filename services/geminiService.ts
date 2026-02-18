@@ -15,23 +15,32 @@ const getMimeType = (base64Data: string) => {
 
 // Robust API Key Retrieval
 const getApiKey = (): string | undefined => {
+  let key: string | undefined = undefined;
+
   // 1. Try standard process.env (Node/Webpack)
   if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-    return process.env.API_KEY;
+    key = process.env.API_KEY;
   }
   
   // 2. Try Vite import.meta.env
-  try {
-    // @ts-ignore
-    if (import.meta && import.meta.env && import.meta.env.VITE_API_KEY) {
+  if (!key) {
+    try {
       // @ts-ignore
-      return import.meta.env.VITE_API_KEY;
+      if (import.meta && import.meta.env && import.meta.env.VITE_API_KEY) {
+        // @ts-ignore
+        key = import.meta.env.VITE_API_KEY;
+      }
+    } catch (e) {
+      // Ignore if not in Vite
     }
-  } catch (e) {
-    // Ignore if not in Vite
   }
 
-  return undefined;
+  // Check if key is the placeholder or empty
+  if (!key || key === 'INSERT_YOUR_VALID_GEMINI_API_KEY_HERE' || key.includes('INSERT_YOUR')) {
+    return undefined;
+  }
+
+  return key;
 };
 
 // Helper for delays
@@ -41,8 +50,8 @@ const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function retryOperation<T>(
   operation: () => Promise<T>, 
   onStatusUpdate?: (msg: string) => void,
-  retries = 6, 
-  initialDelay = 10000
+  retries = 3, 
+  initialDelay = 12000
 ): Promise<T> {
   let delay = initialDelay;
   
@@ -62,7 +71,7 @@ async function retryOperation<T>(
         console.warn(`Rate limit hit (Attempt ${i + 1}/${retries}). Waiting ${waitSeconds}s...`);
         
         if (onStatusUpdate) {
-          onStatusUpdate(`High traffic. Retrying in ${waitSeconds}s...`);
+          onStatusUpdate(`High traffic (429). Retrying in ${waitSeconds}s...`);
         }
 
         await wait(delay);
@@ -85,7 +94,7 @@ export const generateRoomRedesign = async (
   onStatusUpdate?: (msg: string) => void
 ): Promise<string> => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key missing. Please set VITE_API_KEY in your .env file.");
+  if (!apiKey) throw new Error("API Key missing or invalid. Please check your .env file.");
 
   const ai = new GoogleGenAI({ apiKey });
   const modelId = 'gemini-2.5-flash-image';
@@ -139,11 +148,15 @@ export const generateRoomRedesign = async (
     console.error("Redesign error:", error);
     
     if (error.status === 403 || (error.message && error.message.includes('leaked'))) {
-      throw new Error("Your API Key has been revoked. Please generate a new key.");
+      throw new Error("Your API Key has been revoked by Google. Please generate a new key in AI Studio.");
+    }
+
+    if (error.status === 400 && error.message.includes('API key')) {
+      throw new Error("Invalid API Key. Please check your .env file.");
     }
     
     if (error.status === 429) {
-       throw new Error("System is currently experiencing very high traffic. Please try again in 2-3 minutes.");
+       throw new Error("System is busy (Rate Limit). We retried several times, but the server is still busy. Please wait 1 minute.");
     }
     
     throw error;
