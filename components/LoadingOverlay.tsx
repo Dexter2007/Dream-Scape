@@ -6,13 +6,13 @@ interface LoadingOverlayProps {
 }
 
 const LOADING_MESSAGES = [
-  "Mapping architectural structure...",
-  "Applying high-fidelity textures...",
-  "Simulating global illumination...",
-  "Rendering furniture silhouettes...",
-  "Finalizing material properties...",
-  "Polishing with Gemini 3 Pro...",
-  "Optimizing 1K resolution design..."
+  "Analyzing room geometry...",
+  "Identifying light sources...",
+  "Removing clutter...",
+  "Applying style textures...",
+  "Rendering photorealistic lighting...",
+  "Finalizing design details...",
+  "Polishing your masterpiece..."
 ];
 
 export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ status }) => {
@@ -21,7 +21,7 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ status }) => {
   useEffect(() => {
     const interval = setInterval(() => {
       setMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
-    }, 3000);
+    }, 2500);
     return () => clearInterval(interval);
   }, []);
 
@@ -44,9 +44,9 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ status }) => {
         </div>
       </div>
 
-      <div className="text-center space-y-3 px-6">
+      <div className="text-center space-y-2 px-6">
         <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 animate-pulse">
-           {status || 'Generating Pro Design...'}
+           {status || 'Dreaming up your design...'}
         </h3>
         <p className="text-slate-500 dark:text-slate-400 text-sm font-medium transition-all duration-500 h-5">
            {LOADING_MESSAGES[messageIndex]}
