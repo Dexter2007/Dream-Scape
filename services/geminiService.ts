@@ -2,6 +2,16 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DesignAdvice, LookCollection } from "../types";
 
+// Simple in-memory cache to prevent redundant API calls
+const responseCache = new Map<string, any>();
+
+// Helper to generate a cache key
+const getCacheKey = (type: string, data: string, ...args: any[]) => {
+  // Use first 50 chars + length + last 50 chars to create a unique enough key for base64 images without storing the whole string
+  const dataSignature = `${data.substring(0, 50)}_${data.length}_${data.slice(-50)}`;
+  return `${type}_${dataSignature}_${args.join('_')}`;
+};
+
 // Helper to clean base64 string
 const cleanBase64 = (base64Data: string) => {
   return base64Data.split(',')[1] || base64Data;
@@ -147,10 +157,11 @@ const resizeImage = (base64Str: string, maxDimension = 1024): Promise<string> =>
 };
 
 // Retry wrapper for API calls with Aggressive Backoff and Status Updates
+// Reduced default retries from 8 to 4 to prevent excessively long "System busy" states
 async function retryOperation<T>(
   operation: () => Promise<T>, 
   onStatusUpdate?: (msg: string) => void,
-  retries = 8, 
+  retries = 4, 
   initialDelay = 2000
 ): Promise<T> {
   let delay = initialDelay;
@@ -185,8 +196,8 @@ async function retryOperation<T>(
 
         await wait(currentDelay);
         
-        // Increase delay for next attempt, cap at 15 seconds
-        delay = Math.min(delay * 1.5, 15000);
+        // Increase delay for next attempt, cap at 10 seconds (reduced from 15)
+        delay = Math.min(delay * 1.5, 10000);
         continue;
       }
 
@@ -204,6 +215,14 @@ export const generateRoomRedesign = async (
 ): Promise<string> => {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key missing or invalid. Please check your .env file.");
+
+  // Check cache first
+  const cacheKey = getCacheKey('redesign', base64Image, style);
+  if (responseCache.has(cacheKey)) {
+    if (onStatusUpdate) onStatusUpdate("Loading from cache...");
+    await wait(500); // Small artificial delay for UX smoothness
+    return responseCache.get(cacheKey);
+  }
 
   const ai = new GoogleGenAI({ apiKey });
   const modelId = 'gemini-2.5-flash-image';
@@ -230,7 +249,7 @@ export const generateRoomRedesign = async (
   const optimizedImage = await resizeImage(base64Image, 1024);
 
   try {
-    return await retryOperation(async () => {
+    const result = await retryOperation(async () => {
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
@@ -257,7 +276,12 @@ export const generateRoomRedesign = async (
         }
       }
       throw new Error("No image generated in response.");
-    }, onStatusUpdate, 8, 2000); 
+    }, onStatusUpdate, 5, 2000); 
+
+    // Cache the successful result
+    responseCache.set(cacheKey, result);
+    return result;
+
   } catch (error: any) {
     console.error("Redesign error:", error);
     
@@ -287,6 +311,12 @@ export const getDesignAdvice = async (
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key missing.");
 
+  // Check cache
+  const cacheKey = getCacheKey('advice', base64Image, style);
+  if (responseCache.has(cacheKey)) {
+    return responseCache.get(cacheKey);
+  }
+
   const ai = new GoogleGenAI({ apiKey });
   const modelId = 'gemini-3-flash-preview';
 
@@ -299,7 +329,7 @@ export const getDesignAdvice = async (
   const optimizedImage = await resizeImage(base64Image, 800); // Smaller for analysis
 
   try {
-    return await retryOperation(async () => {
+    const result = await retryOperation(async () => {
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
@@ -354,9 +384,13 @@ export const getDesignAdvice = async (
       const jsonText = response.text || "{}";
       return JSON.parse(jsonText) as DesignAdvice;
     }, onStatusUpdate, 3, 4000); 
+
+    // Cache result
+    responseCache.set(cacheKey, result);
+    return result;
+
   } catch (error: any) {
     console.error("Advice error:", error);
-    // Silent fail for advice is handled in UI, but we throw here to let UI know
     throw error;
   }
 };
@@ -367,6 +401,12 @@ export const generateShopTheLook = async (
 ): Promise<LookCollection> => {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key missing.");
+
+  // Check cache
+  const cacheKey = getCacheKey('shop', base64Image);
+  if (responseCache.has(cacheKey)) {
+    return responseCache.get(cacheKey);
+  }
 
   const ai = new GoogleGenAI({ apiKey });
   const modelId = 'gemini-3-flash-preview';
@@ -390,7 +430,7 @@ export const generateShopTheLook = async (
   const optimizedImage = await resizeImage(base64Image, 1024);
 
   try {
-    return await retryOperation(async () => {
+    const result = await retryOperation(async () => {
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
@@ -447,7 +487,6 @@ export const generateShopTheLook = async (
         // Fallback if cropping failed or no box was provided
         if (!imageUrl) {
            // Use a deterministic random fallback based on index to be stable for this session
-           // or just random. Random from pool ensures variety.
            imageUrl = FALLBACK_PRODUCT_IMAGES[Math.floor(Math.random() * FALLBACK_PRODUCT_IMAGES.length)];
         }
         
@@ -469,7 +508,12 @@ export const generateShopTheLook = async (
         image: base64Image, // Keep original for display
         products: productsWithImages
       } as LookCollection;
-    }, onStatusUpdate, 5, 3000);
+    }, onStatusUpdate, 3, 3000); // Reduced to 3 retries for quicker feedback
+
+    // Cache result
+    responseCache.set(cacheKey, result);
+    return result;
+
   } catch (error: any) {
     console.error("Shop The Look error:", error);
     throw error;
