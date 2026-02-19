@@ -13,8 +13,7 @@ class PersistentCache {
   }
 
   private hydrateFromStorage() {
-    // Optional: Load keys into memory or just lazy load
-    // We'll lazy load in get() to save startup time
+    // Lazy load implementation
   }
 
   get(key: string): any | null {
@@ -84,8 +83,6 @@ class PersistentCache {
     const toRemove = Math.ceil(keys.length * 0.3) || 1;
     for (let i = 0; i < toRemove; i++) {
        localStorage.removeItem(keys[i].key);
-       // We don't remove from memoryCache here to keep current session fast,
-       // memory will be cleared on reload anyway.
     }
   }
 }
@@ -95,8 +92,6 @@ const resizedImageCache = new Map<string, string>();
 
 // Helper to generate a cache key
 const getCacheKey = (type: string, data: string, ...args: any[]) => {
-  // Use a hash-like signature for the large base64 string
-  // Taking start, end, and length is a good proxy for uniqueness without full string
   const dataSignature = `${data.substring(0, 30)}_${data.length}_${data.slice(-30)}`;
   return `${type}_${dataSignature}_${args.join('_')}`;
 };
@@ -180,8 +175,6 @@ async function cropImage(base64Image: string, box: number[]): Promise<string> {
 }
 
 // Helper to resize image
-// OPTIMIZATION: Aggressive downsizing to save tokens and prevent rate limits
-// Added memory caching to prevent repeated canvas operations on the same image
 const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => {
   const cacheKey = `${base64Str.substring(0, 30)}_${base64Str.length}_${maxDimension}`;
   if (resizedImageCache.has(cacheKey)) {
@@ -232,59 +225,35 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
   });
 };
 
-// Persistent Background Retry Wrapper
-async function retryOperation<T>(
+// Wrapper that executes operation ONCE.
+// Removed retry loop logic to fail fast.
+async function executeOperation<T>(
   operation: () => Promise<T>, 
-  onStatusUpdate?: (msg: string) => void,
-  retries = 60, // Try up to 60 times (approx 5-10 minutes of trying)
-  initialDelay = 3000
+  onStatusUpdate?: (msg: string) => void
 ): Promise<T> {
-  let delay = initialDelay;
-  
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await operation();
-    } catch (error: any) {
-      const errorMessage = error.message || '';
-      
-      // Check for retryable errors (Rate Limit 429, Overloaded 503)
-      const isRateLimit = error.status === 429 || 
-                          errorMessage.includes('429') || 
-                          errorMessage.includes('exhausted') ||
-                          errorMessage.includes('quota') ||
-                          errorMessage.includes('Too Many Requests');
-                          
-      const isOverloaded = error.status === 503 || 
-                           errorMessage.includes('503') || 
-                           errorMessage.includes('Overloaded') ||
-                           errorMessage.includes('Service Unavailable');
-
-      // If it's a fatal error (like 400 Bad Request, 401 Unauthorized), throw immediately
-      if (!isRateLimit && !isOverloaded) {
-        throw error;
-      }
-
-      // If we finally exceeded max retries, throw
-      if (i === retries - 1) throw new Error("Server is currently experiencing very high traffic. Please try again later.");
-
-      // Calculate delay with jitter to prevent synchronized retries
-      const jitter = Math.random() * 2000;
-      const currentDelay = delay + jitter;
-      const waitSeconds = Math.ceil(currentDelay / 1000);
-      
-      console.warn(`Retryable error (Attempt ${i + 1}/${retries}). Waiting ${waitSeconds}s...`);
-      
-      if (onStatusUpdate) {
-        onStatusUpdate(`High traffic. Auto-retrying in ${waitSeconds}s...`);
-      }
-
-      await wait(currentDelay);
-      
-      // Cap the maximum delay at 15 seconds to keep polling active but polite
-      delay = Math.min(delay * 1.5, 15000);
+  try {
+    return await operation();
+  } catch (error: any) {
+    const errorMessage = error.message || '';
+    
+    // Provide user-friendly error messages for common API issues
+    if (error.status === 429 || 
+        errorMessage.includes('429') || 
+        errorMessage.includes('exhausted') || 
+        errorMessage.includes('quota') ||
+        errorMessage.includes('Too Many Requests')) {
+      throw new Error("System is busy (Rate Limit). Please try again in a moment.");
     }
+    
+    if (error.status === 503 || 
+        errorMessage.includes('503') || 
+        errorMessage.includes('Overloaded') ||
+        errorMessage.includes('Service Unavailable')) {
+      throw new Error("AI Service is currently overloaded. Please try again.");
+    }
+
+    throw error;
   }
-  throw new Error("Request timed out.");
 }
 
 // ------------------------------------------------------------------
@@ -302,7 +271,7 @@ export const generateRoomRedesign = async (
   const cached = cache.get(cacheKey);
   if (cached) {
     if (onStatusUpdate) onStatusUpdate("Loading from cache...");
-    await wait(500); // Small artificial delay for UX smoothness
+    await wait(200); 
     return cached;
   }
 
@@ -326,11 +295,10 @@ export const generateRoomRedesign = async (
   `;
 
   if (onStatusUpdate) onStatusUpdate("Optimizing image for AI...");
-  // 640px is the sweet spot for GenAI input to balance quality/tokens
   const optimizedImage = await resizeImage(base64Image, 640);
 
   try {
-    const result = await retryOperation(async () => {
+    const result = await executeOperation(async () => {
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
@@ -352,7 +320,7 @@ export const generateRoomRedesign = async (
         }
       }
       throw new Error("No image generated.");
-    }, onStatusUpdate, 60, 5000); 
+    }, onStatusUpdate); 
 
     cache.set(cacheKey, result);
     return result;
@@ -388,14 +356,13 @@ export const generateQuizResultDescription = async (
   `;
 
   try {
-    // Retry less aggressively for text as it's lighter
-    const result = await retryOperation(async () => {
+    const result = await executeOperation(async () => {
       const response = await ai.models.generateContent({
         model: modelId,
         contents: { parts: [{ text: prompt }] }
       });
       return response.text || "";
-    }, undefined, 10, 2000); // 10 retries for text
+    });
 
     if (result) cache.set(cacheKey, result);
     return result || `A beautiful ${style} aesthetic curated just for you.`;
@@ -424,11 +391,10 @@ export const getDesignAdvice = async (
     Provide professional interior design advice in JSON format.
   `;
   
-  // 480px is plenty for text analysis
   const optimizedImage = await resizeImage(base64Image, 480);
 
   try {
-    const result = await retryOperation(async () => {
+    const result = await executeOperation(async () => {
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
@@ -463,7 +429,7 @@ export const getDesignAdvice = async (
         }
       });
       return JSON.parse(response.text || "{}") as DesignAdvice;
-    }, onStatusUpdate, 30, 3000); 
+    }, onStatusUpdate); 
 
     cache.set(cacheKey, result);
     return result;
@@ -496,11 +462,10 @@ export const generateShopTheLook = async (
     4. products (array of objects with name, price, category, query, box_2d [ymin, xmin, ymax, xmax])
   `;
   
-  // 480px is sufficient for object detection in this context
   const optimizedImage = await resizeImage(base64Image, 480);
 
   try {
-    const result = await retryOperation(async () => {
+    const result = await executeOperation(async () => {
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
@@ -571,16 +536,12 @@ export const generateShopTheLook = async (
         image: base64Image,
         products: productsWithImages
       } as LookCollection;
-    }, onStatusUpdate, 30, 3000);
+    }, onStatusUpdate);
 
     cache.set(cacheKey, result);
     return result;
   } catch (error: any) {
     console.error("Shop The Look error:", error);
-    const msg = error.message || '';
-    if (error.status === 429 || msg.includes('429') || msg.includes('exhausted')) {
-       throw new Error("System is busy (Rate Limit). Please wait 1 minute and try again.");
-    }
     throw error;
   }
 };
