@@ -2,12 +2,102 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DesignAdvice, LookCollection } from "../types";
 
-// Simple in-memory cache to prevent redundant API calls
-const responseCache = new Map<string, any>();
+// --- PERSISTENT CACHE IMPLEMENTATION ---
+class PersistentCache {
+  private memoryCache = new Map<string, any>();
+  private prefix = 'dsc_'; // Short prefix
+  private maxAge = 24 * 60 * 60 * 1000; // 24 hours
+
+  constructor() {
+    this.hydrateFromStorage();
+  }
+
+  private hydrateFromStorage() {
+    // Optional: Load keys into memory or just lazy load
+    // We'll lazy load in get() to save startup time
+  }
+
+  get(key: string): any | null {
+    // 1. Check memory
+    if (this.memoryCache.has(key)) return this.memoryCache.get(key);
+
+    // 2. Check localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(this.prefix + key);
+        if (stored) {
+          const { data, timestamp } = JSON.parse(stored);
+          // Expiry check
+          if (Date.now() - timestamp > this.maxAge) {
+            localStorage.removeItem(this.prefix + key);
+            return null;
+          }
+          this.memoryCache.set(key, data);
+          return data;
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+    }
+    return null;
+  }
+
+  set(key: string, data: any): void {
+    this.memoryCache.set(key, data);
+
+    if (typeof window !== 'undefined') {
+      try {
+        const entry = JSON.stringify({ data, timestamp: Date.now() });
+        localStorage.setItem(this.prefix + key, entry);
+      } catch (e: any) {
+        if (e.name === 'QuotaExceededError' || e.message?.toLowerCase().includes('quota')) {
+          this.pruneCache();
+          try {
+             // Try again after pruning
+             localStorage.setItem(this.prefix + key, JSON.stringify({ data, timestamp: Date.now() }));
+          } catch (retryError) {
+             console.warn("Cache write failed after pruning", retryError);
+          }
+        }
+      }
+    }
+  }
+
+  private pruneCache() {
+    const keys: { key: string, timestamp: number }[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(this.prefix)) {
+        try {
+          const item = JSON.parse(localStorage.getItem(k) || '{}');
+          keys.push({ key: k, timestamp: item.timestamp || 0 });
+        } catch {
+          keys.push({ key: k, timestamp: 0 });
+        }
+      }
+    }
+
+    // Sort by oldest
+    keys.sort((a, b) => a.timestamp - b.timestamp);
+
+    // Remove oldest 30% to free up significant space
+    const toRemove = Math.ceil(keys.length * 0.3) || 1;
+    for (let i = 0; i < toRemove; i++) {
+       localStorage.removeItem(keys[i].key);
+       // We don't remove from memoryCache here to keep current session fast,
+       // memory will be cleared on reload anyway.
+    }
+  }
+}
+
+const cache = new PersistentCache();
+const resizedImageCache = new Map<string, string>();
 
 // Helper to generate a cache key
 const getCacheKey = (type: string, data: string, ...args: any[]) => {
-  const dataSignature = `${data.substring(0, 50)}_${data.length}_${data.slice(-50)}`;
+  // Use a hash-like signature for the large base64 string
+  // Taking start, end, and length is a good proxy for uniqueness without full string
+  const dataSignature = `${data.substring(0, 30)}_${data.length}_${data.slice(-30)}`;
   return `${type}_${dataSignature}_${args.join('_')}`;
 };
 
@@ -91,7 +181,13 @@ async function cropImage(base64Image: string, box: number[]): Promise<string> {
 
 // Helper to resize image
 // OPTIMIZATION: Aggressive downsizing to save tokens and prevent rate limits
+// Added memory caching to prevent repeated canvas operations on the same image
 const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => {
+  const cacheKey = `${base64Str.substring(0, 30)}_${base64Str.length}_${maxDimension}`;
+  if (resizedImageCache.has(cacheKey)) {
+    return Promise.resolve(resizedImageCache.get(cacheKey)!);
+  }
+
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -101,6 +197,7 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
       let h = img.height;
       
       if (w <= maxDimension && h <= maxDimension) {
+        resizedImageCache.set(cacheKey, base64Str);
         resolve(base64Str);
         return;
       }
@@ -124,7 +221,9 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
       if (ctx) {
         ctx.drawImage(img, 0, 0, w, h);
         // 0.5 Quality is sufficient for AI analysis but significantly smaller payload
-        resolve(canvas.toDataURL('image/jpeg', 0.5));
+        const resized = canvas.toDataURL('image/jpeg', 0.5);
+        resizedImageCache.set(cacheKey, resized);
+        resolve(resized);
       } else {
         resolve(base64Str);
       }
@@ -134,7 +233,6 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
 };
 
 // Persistent Background Retry Wrapper
-// Keeps trying for a long time if the system is busy, instead of failing early.
 async function retryOperation<T>(
   operation: () => Promise<T>, 
   onStatusUpdate?: (msg: string) => void,
@@ -201,10 +299,11 @@ export const generateRoomRedesign = async (
   if (!apiKey) throw new Error("API Key missing or invalid.");
 
   const cacheKey = getCacheKey('redesign', base64Image, style);
-  if (responseCache.has(cacheKey)) {
+  const cached = cache.get(cacheKey);
+  if (cached) {
     if (onStatusUpdate) onStatusUpdate("Loading from cache...");
-    await wait(500); 
-    return responseCache.get(cacheKey);
+    await wait(500); // Small artificial delay for UX smoothness
+    return cached;
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -255,7 +354,7 @@ export const generateRoomRedesign = async (
       throw new Error("No image generated.");
     }, onStatusUpdate, 60, 5000); 
 
-    responseCache.set(cacheKey, result);
+    cache.set(cacheKey, result);
     return result;
 
   } catch (error: any) {
@@ -276,7 +375,8 @@ export const generateQuizResultDescription = async (
   if (!apiKey) return `A unique fusion style tailored just for you: ${style}.`;
 
   const cacheKey = `quiz_desc_${style}`;
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
 
   const ai = new GoogleGenAI({ apiKey });
   // Use Text Model for text tasks
@@ -297,7 +397,7 @@ export const generateQuizResultDescription = async (
       return response.text || "";
     }, undefined, 10, 2000); // 10 retries for text
 
-    if (result) responseCache.set(cacheKey, result);
+    if (result) cache.set(cacheKey, result);
     return result || `A beautiful ${style} aesthetic curated just for you.`;
   } catch (e) {
     return `A unique fusion style tailored just for you: ${style}.`;
@@ -313,7 +413,8 @@ export const getDesignAdvice = async (
   if (!apiKey) throw new Error("API Key missing.");
 
   const cacheKey = getCacheKey('advice', base64Image, style);
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
 
   const ai = new GoogleGenAI({ apiKey });
   const modelId = 'gemini-3-flash-preview'; // Text model for analysis
@@ -364,7 +465,7 @@ export const getDesignAdvice = async (
       return JSON.parse(response.text || "{}") as DesignAdvice;
     }, onStatusUpdate, 30, 3000); 
 
-    responseCache.set(cacheKey, result);
+    cache.set(cacheKey, result);
     return result;
   } catch (error: any) {
     console.error("Advice error:", error);
@@ -380,7 +481,8 @@ export const generateShopTheLook = async (
   if (!apiKey) throw new Error("API Key missing.");
 
   const cacheKey = getCacheKey('shop', base64Image);
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
 
   const ai = new GoogleGenAI({ apiKey });
   const modelId = 'gemini-3-flash-preview'; // Text model for analysis
@@ -471,7 +573,7 @@ export const generateShopTheLook = async (
       } as LookCollection;
     }, onStatusUpdate, 30, 3000);
 
-    responseCache.set(cacheKey, result);
+    cache.set(cacheKey, result);
     return result;
   } catch (error: any) {
     console.error("Shop The Look error:", error);
