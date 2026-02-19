@@ -4,6 +4,10 @@ import { DesignAdvice, LookCollection } from "../types";
 // Simple in-memory cache to prevent redundant API calls
 const responseCache = new Map<string, any>();
 
+// API Base URL - Points to the local Node.js server
+// In production, this would be an environment variable
+const API_BASE_URL = 'http://localhost:3001';
+
 // Helper to generate a cache key
 const getCacheKey = (type: string, data: string, ...args: any[]) => {
   const dataSignature = `${data.substring(0, 50)}_${data.length}_${data.slice(-50)}`;
@@ -94,21 +98,38 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
 
 // Generic Fetch Helper
 async function apiCall(endpoint: string, body: any) {
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  const url = `${API_BASE_URL}${endpoint}`;
   
-  if (!response.ok) {
-    let errorMsg = "Server Error";
-    try {
-       const errorData = await response.json();
-       errorMsg = errorData.error || errorMsg;
-    } catch (e) {}
-    throw new Error(errorMsg);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    
+    if (!response.ok) {
+      let errorMsg = "Server Error";
+      try {
+         const errorData = await response.json();
+         errorMsg = errorData.error || errorMsg;
+      } catch (e) {
+         // Fallback if response isn't JSON (e.g., 404 HTML from Vite if hitting wrong port)
+         if (response.status === 404) {
+            errorMsg = "Server endpoint not found. Is 'node server.js' running on port 3001?";
+         } else {
+            errorMsg = `Server Error (${response.status})`;
+         }
+      }
+      throw new Error(errorMsg);
+    }
+    return response.json();
+  } catch (error: any) {
+    // Handle network errors (e.g., server down)
+    if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+      throw new Error("Could not connect to server. Please ensure 'node server.js' is running.");
+    }
+    throw error;
   }
-  return response.json();
 }
 
 // ------------------------------------------------------------------
