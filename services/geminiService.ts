@@ -133,12 +133,13 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
   });
 };
 
-// Retry wrapper with Aggressive Backoff
+// Persistent Background Retry Wrapper
+// Keeps trying for a long time if the system is busy, instead of failing early.
 async function retryOperation<T>(
   operation: () => Promise<T>, 
   onStatusUpdate?: (msg: string) => void,
-  retries = 5, 
-  initialDelay = 5000 // Start with 5 seconds to clear any buffers
+  retries = 60, // Try up to 60 times (approx 5-10 minutes of trying)
+  initialDelay = 3000
 ): Promise<T> {
   let delay = initialDelay;
   
@@ -147,30 +148,45 @@ async function retryOperation<T>(
       return await operation();
     } catch (error: any) {
       const errorMessage = error.message || '';
+      
+      // Check for retryable errors (Rate Limit 429, Overloaded 503)
       const isRateLimit = error.status === 429 || 
                           errorMessage.includes('429') || 
                           errorMessage.includes('exhausted') ||
-                          errorMessage.includes('quota');
-      const isOverloaded = error.status === 503 || errorMessage.includes('503') || errorMessage.includes('Overloaded');
+                          errorMessage.includes('quota') ||
+                          errorMessage.includes('Too Many Requests');
+                          
+      const isOverloaded = error.status === 503 || 
+                           errorMessage.includes('503') || 
+                           errorMessage.includes('Overloaded') ||
+                           errorMessage.includes('Service Unavailable');
 
-      if (isRateLimit || isOverloaded) {
-        if (i === retries - 1) throw error;
-
-        const jitter = Math.random() * 2000;
-        const currentDelay = delay + jitter;
-        const waitSeconds = Math.ceil(currentDelay / 1000);
-        
-        console.warn(`Rate limit hit (Attempt ${i + 1}/${retries}). Waiting ${waitSeconds}s...`);
-        if (onStatusUpdate) onStatusUpdate(`System busy (Rate Limit). Retrying in ${waitSeconds}s...`);
-
-        await wait(currentDelay);
-        delay = Math.min(delay * 2, 30000); // Cap at 30s
-        continue;
+      // If it's a fatal error (like 400 Bad Request, 401 Unauthorized), throw immediately
+      if (!isRateLimit && !isOverloaded) {
+        throw error;
       }
-      throw error;
+
+      // If we finally exceeded max retries, throw
+      if (i === retries - 1) throw new Error("Server is currently experiencing very high traffic. Please try again later.");
+
+      // Calculate delay with jitter to prevent synchronized retries
+      const jitter = Math.random() * 2000;
+      const currentDelay = delay + jitter;
+      const waitSeconds = Math.ceil(currentDelay / 1000);
+      
+      console.warn(`Retryable error (Attempt ${i + 1}/${retries}). Waiting ${waitSeconds}s...`);
+      
+      if (onStatusUpdate) {
+        onStatusUpdate(`High traffic. Auto-retrying in ${waitSeconds}s...`);
+      }
+
+      await wait(currentDelay);
+      
+      // Cap the maximum delay at 15 seconds to keep polling active but polite
+      delay = Math.min(delay * 1.5, 15000);
     }
   }
-  throw new Error("Maximum retries exceeded");
+  throw new Error("Request timed out.");
 }
 
 // ------------------------------------------------------------------
@@ -237,17 +253,13 @@ export const generateRoomRedesign = async (
         }
       }
       throw new Error("No image generated.");
-    }, onStatusUpdate, 5, 5000); 
+    }, onStatusUpdate, 60, 5000); 
 
     responseCache.set(cacheKey, result);
     return result;
 
   } catch (error: any) {
     console.error("Redesign error:", error);
-    const msg = error.message || '';
-    if (error.status === 429 || msg.includes('429') || msg.includes('exhausted')) {
-       throw new Error("System is busy (Rate Limit). We retried several times, but the server is still busy. Please wait 1 minute.");
-    }
     throw error;
   }
 };
@@ -283,7 +295,7 @@ export const generateQuizResultDescription = async (
         contents: { parts: [{ text: prompt }] }
       });
       return response.text || "";
-    }, undefined, 3, 2000);
+    }, undefined, 10, 2000); // 10 retries for text
 
     if (result) responseCache.set(cacheKey, result);
     return result || `A beautiful ${style} aesthetic curated just for you.`;
@@ -350,7 +362,7 @@ export const getDesignAdvice = async (
         }
       });
       return JSON.parse(response.text || "{}") as DesignAdvice;
-    }, onStatusUpdate, 3, 3000); 
+    }, onStatusUpdate, 30, 3000); 
 
     responseCache.set(cacheKey, result);
     return result;
@@ -457,7 +469,7 @@ export const generateShopTheLook = async (
         image: base64Image,
         products: productsWithImages
       } as LookCollection;
-    }, onStatusUpdate, 3, 3000);
+    }, onStatusUpdate, 30, 3000);
 
     responseCache.set(cacheKey, result);
     return result;
