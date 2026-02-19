@@ -194,10 +194,24 @@ const App: React.FC = () => {
     };
   };
 
+  const checkKeyAndGenerate = async () => {
+    if (!originalImage || isGeneratingRef.current) return;
+    
+    // Pro models require key selection
+    // @ts-ignore
+    const hasKey = await window.aistudio.hasSelectedApiKey();
+    if (!hasKey) {
+      // @ts-ignore
+      await window.aistudio.openSelectKey();
+      // Proceeding after triggering openSelectKey as per instructions to mitigate race conditions
+    }
+    handleGenerate();
+  };
+
   const handleGenerate = async () => {
     if (!originalImage || isGeneratingRef.current) return;
     isGeneratingRef.current = true;
-    setLoadingState({ isGenerating: true, statusMessage: 'Preparing your design...' });
+    setLoadingState({ isGenerating: true, statusMessage: 'Initializing high-quality render...' });
     setError(null);
     setLastFailedAction(null);
     setResult({ originalImage, generatedImage: null, advice: null }); 
@@ -214,12 +228,19 @@ const App: React.FC = () => {
     const updateStatus = (msg: string) => setLoadingState(prev => ({ ...prev, statusMessage: msg }));
 
     try {
-      setLoadingState({ isGenerating: true, statusMessage: 'Dreaming up your new room...' });
+      setLoadingState({ isGenerating: true, statusMessage: 'Generating high-fidelity 1K design...' });
       const generatedImg = await generateRoomRedesign(originalImage, selectedStyle, updateStatus);
       setResult(prev => ({ originalImage, generatedImage: generatedImg, advice: null }));
     } catch (err: any) {
       console.error("Generation failed", err);
-      setError(err.message || "Something went wrong. Please check your API key and try again.");
+      const msg = err.message || "";
+      if (msg.includes("Requested entity was not found")) {
+        setError("AI Engine project mismatch. Please select a valid Paid API Key.");
+        // @ts-ignore
+        await window.aistudio.openSelectKey();
+      } else {
+        setError(msg || "Something went wrong. High traffic.");
+      }
       setLastFailedAction('redesign');
     } finally {
       setLoadingState({ isGenerating: false, statusMessage: '' });
@@ -234,7 +255,7 @@ const App: React.FC = () => {
     setLastFailedAction(null);
     try {
       const advice = await getDesignAdvice(originalImage, selectedStyle, (msg) => {
-         setError(msg); // Use error bar temporarily for status updates
+         setError(msg); 
       });
       setError(null);
       setResult(prev => prev ? { ...prev, advice } : null);
@@ -248,7 +269,7 @@ const App: React.FC = () => {
   };
 
   const handleRetry = () => {
-    if (lastFailedAction === 'redesign') handleGenerate();
+    if (lastFailedAction === 'redesign') checkKeyAndGenerate();
     else if (lastFailedAction === 'advice') handleGetAdvice();
   };
 
@@ -274,7 +295,7 @@ const App: React.FC = () => {
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 drop-shadow-sm">sanctuary.</span>
                   </h1>
                   <p className="text-lg md:text-xl lg:text-2xl text-slate-600 dark:text-slate-300 mb-8 md:mb-12 font-light leading-relaxed max-w-2xl mx-auto px-2">
-                    Experience the future of interior design. Upload a photo, curate your style, and watch your space transform instantly.
+                    Experience the future of interior design. Upload a photo, curate your style, and watch your space transform instantly with high-fidelity rendering.
                   </p>
                   <div className="max-w-xl mx-auto bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-2 rounded-3xl shadow-2xl shadow-indigo-200/40 dark:shadow-indigo-900/20 border border-white/60 dark:border-slate-700/60 transform hover:scale-[1.01] transition-transform duration-300 ring-1 ring-white/60 dark:ring-slate-700/60">
                     <ImageUpload onImageSelected={handleImageSelected} />
@@ -292,8 +313,8 @@ const App: React.FC = () => {
                     </div>
                     <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
                        <div className="w-12 h-12 bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">⚡</div>
-                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Instant Rendering</h3>
-                      <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base">Visualize your new room in seconds with state-of-the-art Generative AI.</p>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Pro Rendering</h3>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base">Visualize your room in stunning 1K quality using state-of-the-art Gemini 3 Pro.</p>
                     </div>
                   </div>
                 </div>
@@ -314,8 +335,8 @@ const App: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-3 w-full md:w-auto">
-                      <button onClick={handleGenerate} disabled={loadingState.isGenerating} className="w-full md:w-auto px-6 md:px-10 py-3 md:py-4 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-medium rounded-full transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center gap-2 text-sm md:text-base">
-                        {loadingState.isGenerating ? 'Designing...' : 'Generate New Design'}
+                      <button onClick={checkKeyAndGenerate} disabled={loadingState.isGenerating} className="w-full md:w-auto px-6 md:px-10 py-3 md:py-4 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-medium rounded-full transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center gap-2 text-sm md:text-base">
+                        {loadingState.isGenerating ? 'Rendering Pro Design...' : 'Generate Pro Design'}
                       </button>
                     </div>
                   </div>
@@ -325,7 +346,7 @@ const App: React.FC = () => {
                 </div>
 
                 {error && (
-                  <div className={`border px-6 py-4 rounded-xl flex items-center justify-between gap-4 animate-fade-in-up shadow-sm ${error.includes('High traffic') || error.includes('busy') ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-200' : 'bg-red-50 border-red-100 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-200'}`}>
+                  <div className={`border px-6 py-4 rounded-xl flex items-center justify-between gap-4 animate-fade-in-up shadow-sm ${error.includes('Key') || error.includes('entity') ? 'bg-indigo-50 border-indigo-200 text-indigo-800 dark:bg-indigo-900/30 dark:border-indigo-800 dark:text-indigo-200' : 'bg-red-50 border-red-100 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-200'}`}>
                     <div className="flex items-start gap-4">
                       <div className="flex-shrink-0 mt-0.5"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" /></svg></div>
                       <div>
@@ -345,7 +366,7 @@ const App: React.FC = () => {
                         <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-white/60 dark:border-slate-700 aspect-[4/3] bg-white dark:bg-slate-800 group">
                            {loadingState.isGenerating && <LoadingOverlay status={loadingState.statusMessage} />}
                            {result?.generatedImage ? (
-                             <ImageComparisonSlider beforeImage={result.originalImage} afterImage={result.generatedImage} label="DreamSpace" />
+                             <ImageComparisonSlider beforeImage={result.originalImage} afterImage={result.generatedImage} label="DreamSpace Pro" />
                            ) : (
                              <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 dark:text-slate-600 bg-slate-50/50 dark:bg-slate-900/50">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 mb-4 opacity-50"><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></svg>
@@ -357,13 +378,13 @@ const App: React.FC = () => {
                             <div className="flex items-center gap-4">
                               <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded-full text-green-600 dark:text-green-400 flex-shrink-0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l4.75-6.75Z" clipRule="evenodd" /></svg></div>
                               <div>
-                                <h3 className="text-slate-900 dark:text-white font-bold text-lg">Design Ready</h3>
-                                <p className="text-slate-500 dark:text-slate-400 text-sm">Download your new {selectedStyle.toLowerCase()} room design.</p>
+                                <h3 className="text-slate-900 dark:text-white font-bold text-lg">Pro Design Ready</h3>
+                                <p className="text-slate-500 dark:text-slate-400 text-sm">Download your premium {selectedStyle.toLowerCase()} room rendering.</p>
                               </div>
                             </div>
                             <div className="w-full sm:w-auto relative" ref={dropdownRef}>
                               <button onClick={() => setShowDownloadMenu(!showDownloadMenu)} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold text-white bg-slate-900 dark:bg-indigo-600 border border-slate-900 dark:border-indigo-600 rounded-xl hover:bg-indigo-600 transition-all shadow-md focus:ring-2 focus:ring-indigo-200">
-                                <span>Download Design</span>
+                                <span>Download Pro Design</span>
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 transition-transform duration-200 ${showDownloadMenu ? 'rotate-180' : ''}`}><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
                               </button>
                               {showDownloadMenu && (

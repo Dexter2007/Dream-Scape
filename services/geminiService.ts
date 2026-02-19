@@ -5,8 +5,8 @@ import { DesignAdvice, LookCollection } from "../types";
 // --- PERSISTENT CACHE IMPLEMENTATION ---
 class PersistentCache {
   private memoryCache = new Map<string, any>();
-  private prefix = 'dsc_'; // Short prefix
-  private maxAge = 24 * 60 * 60 * 1000; // 24 hours
+  private prefix = 'dsc_'; 
+  private maxAge = 24 * 60 * 60 * 1000;
 
   constructor() {
     this.hydrateFromStorage();
@@ -18,7 +18,6 @@ class PersistentCache {
 
   get(key: string): any | null {
     if (this.memoryCache.has(key)) return this.memoryCache.get(key);
-
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem(this.prefix + key);
@@ -31,16 +30,13 @@ class PersistentCache {
           this.memoryCache.set(key, data);
           return data;
         }
-      } catch (e) {
-        // Ignore
-      }
+      } catch (e) {}
     }
     return null;
   }
 
   set(key: string, data: any): void {
     this.memoryCache.set(key, data);
-
     if (typeof window !== 'undefined') {
       try {
         const entry = JSON.stringify({ data, timestamp: Date.now() });
@@ -50,9 +46,7 @@ class PersistentCache {
           this.pruneCache();
           try {
              localStorage.setItem(this.prefix + key, JSON.stringify({ data, timestamp: Date.now() }));
-          } catch (retryError) {
-             console.warn("Cache write failed", retryError);
-          }
+          } catch (retryError) {}
         }
       }
     }
@@ -97,23 +91,7 @@ const getMimeType = (base64Data: string) => {
 };
 
 const getApiKey = (): string | undefined => {
-  let key: string | undefined = undefined;
-  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-    key = process.env.API_KEY;
-  }
-  if (!key) {
-    try {
-      // @ts-ignore
-      if (import.meta && import.meta.env && import.meta.env.VITE_API_KEY) {
-        // @ts-ignore
-        key = import.meta.env.VITE_API_KEY;
-      }
-    } catch (e) {}
-  }
-  if (!key || key === 'INSERT_YOUR_VALID_GEMINI_API_KEY_HERE' || key.includes('INSERT_YOUR')) {
-    return undefined;
-  }
-  return key;
+  return process.env.API_KEY;
 };
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -202,7 +180,7 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
 async function withRetry<T>(
   operation: () => Promise<T>, 
   onStatusUpdate?: (msg: string) => void,
-  maxRetries = 5 // Increased for better resilience
+  maxRetries = 3
 ): Promise<T> {
   let attempts = 0;
   while (attempts < maxRetries) {
@@ -211,22 +189,27 @@ async function withRetry<T>(
     } catch (error: any) {
       attempts++;
       const errorMessage = error.message || '';
+      
+      // If error suggests "Entity Not Found", it's likely a project mismatch with Gemini 3 Pro
+      if (errorMessage.includes("Requested entity was not found")) {
+        // This specific error is handled in the UI to re-trigger Key Selection
+        throw error;
+      }
+
       const isRateLimit = error.status === 429 || 
                           errorMessage.includes('429') || 
                           errorMessage.includes('exhausted') || 
-                          errorMessage.includes('quota') ||
-                          errorMessage.includes('Too Many Requests');
+                          errorMessage.includes('quota');
       const isOverloaded = error.status === 503 || errorMessage.includes('503') || errorMessage.includes('Overloaded');
 
       if (!isRateLimit && !isOverloaded) throw error;
-      if (attempts >= maxRetries) throw new Error("AI Service is currently at capacity. Please try again in a minute.");
+      if (attempts >= maxRetries) throw new Error("AI capacity reached. Please try again in a few seconds.");
 
-      // Exponential backoff with full jitter to avoid collision
-      const baseDelay = 1500 * Math.pow(2, attempts - 1);
+      const baseDelay = 2000 * Math.pow(2, attempts - 1);
       const delay = Math.random() * baseDelay + 500;
       
       if (onStatusUpdate) {
-        onStatusUpdate(`High traffic detected. Retrying (Attempt ${attempts}/${maxRetries})...`);
+        onStatusUpdate(`Waiting for system capacity (Attempt ${attempts}/${maxRetries})...`);
       }
       await wait(delay);
     }
@@ -240,45 +223,53 @@ export const generateRoomRedesign = async (
   onStatusUpdate?: (msg: string) => void
 ): Promise<string> => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key missing or invalid.");
+  if (!apiKey) throw new Error("API Key missing.");
 
   const cacheKey = getCacheKey('redesign', base64Image, style);
   const cached = cache.get(cacheKey);
-  if (cached) {
-    if (onStatusUpdate) onStatusUpdate("Loading from cache...");
-    await wait(200); 
-    return cached;
-  }
+  if (cached) return cached;
 
-  const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-2.5-flash-image';
-  const prompt = `Act as a professional interior designer. Redesign the room in the input image to fully embody the '${style}' style. Preserve structure. Transform furniture/materials. High definition. Return only image.`;
+  // Optimized System Instructions for Pro Image model
+  const prompt = `Act as a world-class architectural visualizer. 
+  REIMAGINE the room in the attached image using a professional '${style}' interior design aesthetic.
+  CORE CONSTRAINTS:
+  1. STRUCTURAL INTEGRITY: Maintain exact window positions, door frames, and perspective.
+  2. AESTHETIC TRANSFORMATION: Replace ALL furniture, textures, and lighting with high-end ${style} equivalents.
+  3. LIGHTING: Ensure natural, photorealistic sunlight or studio-grade warm lighting.
+  4. QUALITY: High resolution, professional photography style, no text, no watermarks.
+  Return only the generated image.`;
 
-  if (onStatusUpdate) onStatusUpdate("Optimizing image for AI...");
-  const optimizedImage = await resizeImage(base64Image, 640);
+  if (onStatusUpdate) onStatusUpdate("Optimizing source image for pro rendering...");
+  const optimizedImage = await resizeImage(base64Image, 800);
 
   try {
     const result = await withRetry(async () => {
+      // Create new instance to ensure freshest key is used
+      const ai = new GoogleGenAI({ apiKey });
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
-        model: modelId,
+        model: 'gemini-3-pro-image-preview',
         contents: {
           parts: [
             { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
             { text: prompt }
           ]
+        },
+        config: {
+          imageConfig: {
+            aspectRatio: "4:3",
+            imageSize: "1K"
+          }
         }
       });
 
-      if (response.candidates) {
-        for (const candidate of response.candidates) {
-          for (const part of candidate.content.parts) {
-            if (part.inlineData?.data) return `data:image/png;base64,${part.inlineData.data}`;
-          }
+      if (response.candidates?.[0]) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData?.data) return `data:image/png;base64,${part.inlineData.data}`;
         }
       }
-      throw new Error("No image generated.");
-    }, onStatusUpdate, 5);
+      throw new Error("Generation completed but no image was returned.");
+    }, onStatusUpdate, 3);
 
     cache.set(cacheKey, result);
     return result;
@@ -289,26 +280,19 @@ export const generateRoomRedesign = async (
 
 export const generateQuizResultDescription = async (style: string): Promise<string> => {
   const apiKey = getApiKey();
-  if (!apiKey) return `A unique fusion style tailored just for you: ${style}.`;
+  if (!apiKey) return `A unique style tailored for you: ${style}.`;
 
   const cacheKey = `quiz_desc_${style}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const ai = new GoogleGenAI({ apiKey });
-  // Use lite model for lightweight text generation
-  const modelId = 'gemini-flash-lite-latest';
-  const prompt = `Write a captivating, 2-sentence description for an interior design style called "${style}". It should sound professional and personalized.`;
-
   try {
-    const result = await withRetry(async () => {
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: { parts: [{ text: prompt }] }
-      });
-      return response.text || "";
-    }, undefined, 3);
-
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: { parts: [{ text: `Write a captivating 2-sentence interior design description for "${style}".` }] }
+    });
+    const result = response.text || "";
     if (result) cache.set(cacheKey, result);
     return result || `A beautiful ${style} aesthetic curated just for you.`;
   } catch (e) {
@@ -328,23 +312,18 @@ export const getDesignAdvice = async (
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-3-flash-preview'; 
-
-  const prompt = `Analyze this room image for a '${style}' style redesign. Provide professional interior design advice in JSON format.`;
-  
-  // MINIMIZED payload for analysis
   const optimizedImage = await resizeImage(base64Image, 384);
 
   try {
     const result = await withRetry(async () => {
+      const ai = new GoogleGenAI({ apiKey });
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
-        model: modelId,
+        model: 'gemini-3-flash-preview',
         contents: {
           parts: [
             { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
-            { text: prompt }
+            { text: `Analyze this room for a '${style}' style redesign. Return JSON with critique, suggestions, colorPalette (name, hex), and furnitureRecommendations.` }
           ]
         },
         config: {
@@ -372,7 +351,7 @@ export const getDesignAdvice = async (
         }
       });
       return JSON.parse(response.text || "{}") as DesignAdvice;
-    }, onStatusUpdate, 5); 
+    }, onStatusUpdate, 3); 
 
     cache.set(cacheKey, result);
     return result;
@@ -392,22 +371,18 @@ export const generateShopTheLook = async (
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const ai = new GoogleGenAI({ apiKey });
-  // Use lite model for detection tasks
-  const modelId = 'gemini-flash-lite-latest';
-  const prompt = `Analyze this room image and identify the key furniture and decor. Return JSON with title, style, description, and products (name, price, category, query, box_2d [ymin, xmin, ymax, xmax]).`;
-  
   const optimizedImage = await resizeImage(base64Image, 384);
 
   try {
     const result = await withRetry(async () => {
+      const ai = new GoogleGenAI({ apiKey });
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
-        model: modelId,
+        model: 'gemini-3-flash-preview',
         contents: {
           parts: [
             { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
-            { text: prompt }
+            { text: `Identify furniture in this image. Return JSON with title, style, description, and products (name, price, category, query, box_2d [ymin, xmin, ymax, xmax]).` }
           ]
         },
         config: {
@@ -454,7 +429,7 @@ export const generateShopTheLook = async (
         image: base64Image,
         products: productsWithImages
       } as LookCollection;
-    }, onStatusUpdate, 5);
+    }, onStatusUpdate, 3);
 
     cache.set(cacheKey, result);
     return result;
