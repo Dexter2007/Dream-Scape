@@ -1,5 +1,4 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
 import { DesignAdvice, LookCollection } from "../types";
 
 // Simple in-memory cache to prevent redundant API calls
@@ -10,45 +9,6 @@ const getCacheKey = (type: string, data: string, ...args: any[]) => {
   const dataSignature = `${data.substring(0, 50)}_${data.length}_${data.slice(-50)}`;
   return `${type}_${dataSignature}_${args.join('_')}`;
 };
-
-// Helper to clean base64 string
-const cleanBase64 = (base64Data: string) => {
-  return base64Data.split(',')[1] || base64Data;
-};
-
-// Helper to get mime type
-const getMimeType = (base64Data: string) => {
-  const match = base64Data.match(/^data:([^;]+);base64,/);
-  return match ? match[1] : 'image/jpeg';
-};
-
-// Robust API Key Retrieval
-const getApiKey = (): string | undefined => {
-  let key: string | undefined = undefined;
-
-  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-    key = process.env.API_KEY;
-  }
-  
-  if (!key) {
-    try {
-      // @ts-ignore
-      if (import.meta && import.meta.env && import.meta.env.VITE_API_KEY) {
-        // @ts-ignore
-        key = import.meta.env.VITE_API_KEY;
-      }
-    } catch (e) {}
-  }
-
-  if (!key || key === 'INSERT_YOUR_VALID_GEMINI_API_KEY_HERE' || key.includes('INSERT_YOUR')) {
-    return undefined;
-  }
-
-  return key;
-};
-
-// Helper for delays
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Fallback images
 const FALLBACK_PRODUCT_IMAGES = [
@@ -90,7 +50,7 @@ async function cropImage(base64Image: string, box: number[]): Promise<string> {
 }
 
 // Helper to resize image
-// OPTIMIZATION: Aggressive downsizing to save tokens and prevent rate limits
+// OPTIMIZATION: Aggressive downsizing on client to save upload bandwidth
 const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
@@ -123,7 +83,6 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(img, 0, 0, w, h);
-        // 0.5 Quality is sufficient for AI analysis but significantly smaller payload
         resolve(canvas.toDataURL('image/jpeg', 0.5));
       } else {
         resolve(base64Str);
@@ -133,173 +92,75 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
   });
 };
 
-// Persistent Background Retry Wrapper
-// Keeps trying for a long time if the system is busy, instead of failing early.
-async function retryOperation<T>(
-  operation: () => Promise<T>, 
-  onStatusUpdate?: (msg: string) => void,
-  retries = 60, // Try up to 60 times (approx 5-10 minutes of trying)
-  initialDelay = 3000
-): Promise<T> {
-  let delay = initialDelay;
+// Generic Fetch Helper
+async function apiCall(endpoint: string, body: any) {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
   
-  for (let i = 0; i < retries; i++) {
+  if (!response.ok) {
+    let errorMsg = "Server Error";
     try {
-      return await operation();
-    } catch (error: any) {
-      const errorMessage = error.message || '';
-      
-      // Check for retryable errors (Rate Limit 429, Overloaded 503)
-      const isRateLimit = error.status === 429 || 
-                          errorMessage.includes('429') || 
-                          errorMessage.includes('exhausted') ||
-                          errorMessage.includes('quota') ||
-                          errorMessage.includes('Too Many Requests');
-                          
-      const isOverloaded = error.status === 503 || 
-                           errorMessage.includes('503') || 
-                           errorMessage.includes('Overloaded') ||
-                           errorMessage.includes('Service Unavailable');
-
-      // If it's a fatal error (like 400 Bad Request, 401 Unauthorized), throw immediately
-      if (!isRateLimit && !isOverloaded) {
-        throw error;
-      }
-
-      // If we finally exceeded max retries, throw
-      if (i === retries - 1) throw new Error("Server is currently experiencing very high traffic. Please try again later.");
-
-      // Calculate delay with jitter to prevent synchronized retries
-      const jitter = Math.random() * 2000;
-      const currentDelay = delay + jitter;
-      const waitSeconds = Math.ceil(currentDelay / 1000);
-      
-      console.warn(`Retryable error (Attempt ${i + 1}/${retries}). Waiting ${waitSeconds}s...`);
-      
-      if (onStatusUpdate) {
-        onStatusUpdate(`High traffic. Auto-retrying in ${waitSeconds}s...`);
-      }
-
-      await wait(currentDelay);
-      
-      // Cap the maximum delay at 15 seconds to keep polling active but polite
-      delay = Math.min(delay * 1.5, 15000);
-    }
+       const errorData = await response.json();
+       errorMsg = errorData.error || errorMsg;
+    } catch (e) {}
+    throw new Error(errorMsg);
   }
-  throw new Error("Request timed out.");
+  return response.json();
 }
 
 // ------------------------------------------------------------------
-// 1. IMAGE GENERATION (Strictly for Visuals)
+// 1. IMAGE GENERATION
 // ------------------------------------------------------------------
 export const generateRoomRedesign = async (
   base64Image: string,
   style: string,
   onStatusUpdate?: (msg: string) => void
 ): Promise<string> => {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key missing or invalid.");
-
   const cacheKey = getCacheKey('redesign', base64Image, style);
   if (responseCache.has(cacheKey)) {
     if (onStatusUpdate) onStatusUpdate("Loading from cache...");
-    await wait(500); 
     return responseCache.get(cacheKey);
   }
 
-  const ai = new GoogleGenAI({ apiKey });
-  // Use Image Model ONLY for generation
-  const modelId = 'gemini-2.5-flash-image';
-  
-  const prompt = `
-    Act as a professional interior designer.
-    Redesign the room in the input image to fully embody the '${style}' design style.
-    
-    REQUIREMENTS:
-    1. STRICTLY PRESERVE: Room structure, perspective, window/door placements.
-    2. TRANSFORM: Furniture, decor, materials, colors to strictly match '${style}'.
-    3. QUALITY: Photorealistic, high definition, natural lighting.
-    
-    MANDATORY CLEANUP:
-    - REMOVE any existing watermarks or text.
-    - DO NOT generate any text in the image.
-    Return only the generated image.
-  `;
-
-  if (onStatusUpdate) onStatusUpdate("Optimizing image for AI...");
-  // 640px is the sweet spot for GenAI input to balance quality/tokens
+  if (onStatusUpdate) onStatusUpdate("Optimizing image...");
+  // Resize on client before upload
   const optimizedImage = await resizeImage(base64Image, 640);
 
+  if (onStatusUpdate) onStatusUpdate("Sending to design engine...");
+  
   try {
-    const result = await retryOperation(async () => {
-      const mimeType = getMimeType(optimizedImage);
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: {
-          parts: [
-            { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
-            { text: prompt }
-          ]
-        }
-      });
-
-      if (response.candidates) {
-        for (const candidate of response.candidates) {
-          for (const part of candidate.content.parts) {
-            if (part.inlineData && part.inlineData.data) {
-              return `data:image/png;base64,${part.inlineData.data}`;
-            }
-          }
-        }
-      }
-      throw new Error("No image generated.");
-    }, onStatusUpdate, 60, 5000); 
-
-    responseCache.set(cacheKey, result);
-    return result;
-
-  } catch (error: any) {
-    console.error("Redesign error:", error);
-    throw error;
+    const data = await apiCall('/api/redesign', { image: optimizedImage, style });
+    if (data.result) {
+      responseCache.set(cacheKey, data.result);
+      return data.result;
+    }
+    throw new Error("No image returned from server");
+  } catch (err: any) {
+    console.error("Redesign API Error:", err);
+    throw err;
   }
 };
 
 // ------------------------------------------------------------------
-// 2. TEXT/MULTIMODAL GENERATION (Descriptions, Prompts, UI Content)
+// 2. TEXT/MULTIMODAL GENERATION
 // ------------------------------------------------------------------
 
-// New function for Style Quiz Result
 export const generateQuizResultDescription = async (
   style: string
 ): Promise<string> => {
-  const apiKey = getApiKey();
-  if (!apiKey) return `A unique fusion style tailored just for you: ${style}.`;
-
   const cacheKey = `quiz_desc_${style}`;
   if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
 
-  const ai = new GoogleGenAI({ apiKey });
-  // Use Text Model for text tasks
-  const modelId = 'gemini-3-flash-preview';
-
-  const prompt = `
-    Write a captivating, 2-sentence description for an interior design style called "${style}".
-    It should sound professional, inviting, and personalized.
-  `;
-
   try {
-    // Retry less aggressively for text as it's lighter
-    const result = await retryOperation(async () => {
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: { parts: [{ text: prompt }] }
-      });
-      return response.text || "";
-    }, undefined, 10, 2000); // 10 retries for text
-
-    if (result) responseCache.set(cacheKey, result);
-    return result || `A beautiful ${style} aesthetic curated just for you.`;
+    const data = await apiCall('/api/quiz-desc', { style });
+    const text = data.text || `A unique fusion style tailored just for you: ${style}.`;
+    responseCache.set(cacheKey, text);
+    return text;
   } catch (e) {
+    console.warn("Quiz Desc Error", e);
     return `A unique fusion style tailored just for you: ${style}.`;
   }
 };
@@ -309,65 +170,17 @@ export const getDesignAdvice = async (
   style: string,
   onStatusUpdate?: (msg: string) => void
 ): Promise<DesignAdvice> => {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key missing.");
-
   const cacheKey = getCacheKey('advice', base64Image, style);
   if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
 
-  const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-3-flash-preview'; // Text model for analysis
-
-  const prompt = `
-    Analyze this room image for a '${style}' style redesign.
-    Provide professional interior design advice in JSON format.
-  `;
-  
-  // 480px is plenty for text analysis
   const optimizedImage = await resizeImage(base64Image, 480);
-
+  
   try {
-    const result = await retryOperation(async () => {
-      const mimeType = getMimeType(optimizedImage);
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: {
-          parts: [
-            { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
-            { text: prompt }
-          ]
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              critique: { type: Type.STRING },
-              suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
-              colorPalette: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    hex: { type: Type.STRING },
-                  },
-                  required: ["name", "hex"]
-                }
-              },
-              furnitureRecommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
-            },
-            required: ["critique", "suggestions", "colorPalette", "furnitureRecommendations"]
-          }
-        }
-      });
-      return JSON.parse(response.text || "{}") as DesignAdvice;
-    }, onStatusUpdate, 30, 3000); 
-
+    const result = await apiCall('/api/advice', { image: optimizedImage, style });
     responseCache.set(cacheKey, result);
-    return result;
+    return result as DesignAdvice;
   } catch (error: any) {
-    console.error("Advice error:", error);
+    console.error("Advice API Error:", error);
     throw error;
   }
 };
@@ -376,109 +189,49 @@ export const generateShopTheLook = async (
   base64Image: string,
   onStatusUpdate?: (msg: string) => void
 ): Promise<LookCollection> => {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key missing.");
-
   const cacheKey = getCacheKey('shop', base64Image);
   if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
 
-  const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-3-flash-preview'; // Text model for analysis
-
-  const prompt = `
-    Analyze this room image and identify the key furniture and decor products.
-    Return JSON with:
-    1. title (string)
-    2. style (string)
-    3. description (string)
-    4. products (array of objects with name, price, category, query, box_2d [ymin, xmin, ymax, xmax])
-  `;
-  
-  // 480px is sufficient for object detection in this context
   const optimizedImage = await resizeImage(base64Image, 480);
 
   try {
-    const result = await retryOperation(async () => {
-      const mimeType = getMimeType(optimizedImage);
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: {
-          parts: [
-            { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
-            { text: prompt }
-          ]
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              style: { type: Type.STRING },
-              description: { type: Type.STRING },
-              products: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    price: { type: Type.NUMBER },
-                    category: { type: Type.STRING },
-                    query: { type: Type.STRING },
-                    box_2d: { 
-                      type: Type.ARRAY, 
-                      items: { type: Type.NUMBER }
-                    }
-                  },
-                  required: ["name", "price", "category", "query", "box_2d"]
-                }
-              }
-            },
-            required: ["title", "style", "description", "products"]
-          }
-        }
-      });
-
-      const jsonText = response.text || "{}";
-      const data = JSON.parse(jsonText);
+    // 1. Get raw product data from server
+    const data = await apiCall('/api/shop', { image: optimizedImage });
+    
+    // 2. Process images on client (crop using canvas)
+    // We do this on client to avoid complex canvas setups on node server
+    const productsWithImages = await Promise.all((data.products || []).map(async (p: any, idx: number) => {
+      let imageUrl = '';
+      if (p.box_2d && p.box_2d.length === 4) {
+           imageUrl = await cropImage(optimizedImage, p.box_2d);
+      }
+      if (!imageUrl) {
+         imageUrl = FALLBACK_PRODUCT_IMAGES[Math.floor(Math.random() * FALLBACK_PRODUCT_IMAGES.length)];
+      }
       
-      const productsWithImages = await Promise.all((data.products || []).map(async (p: any, idx: number) => {
-        let imageUrl = '';
-        if (p.box_2d && p.box_2d.length === 4) {
-             imageUrl = await cropImage(optimizedImage, p.box_2d);
-        }
-        if (!imageUrl) {
-           imageUrl = FALLBACK_PRODUCT_IMAGES[Math.floor(Math.random() * FALLBACK_PRODUCT_IMAGES.length)];
-        }
-        
-        return {
-          id: `gen-${idx}`,
-          name: p.name,
-          price: p.price,
-          image: imageUrl, 
-          query: p.query || p.name,
-          category: p.category
-        };
-      }));
-
       return {
-        id: Date.now().toString(),
-        title: data.title || "Custom Collection",
-        style: data.style || "Modern",
-        description: data.description || "A curated collection based on your image.",
-        image: base64Image,
-        products: productsWithImages
-      } as LookCollection;
-    }, onStatusUpdate, 30, 3000);
+        id: `gen-${idx}`,
+        name: p.name,
+        price: p.price,
+        image: imageUrl, 
+        query: p.query || p.name,
+        category: p.category
+      };
+    }));
+
+    const result = {
+      id: Date.now().toString(),
+      title: data.title || "Custom Collection",
+      style: data.style || "Modern",
+      description: data.description || "A curated collection based on your image.",
+      image: base64Image,
+      products: productsWithImages
+    } as LookCollection;
 
     responseCache.set(cacheKey, result);
     return result;
   } catch (error: any) {
-    console.error("Shop The Look error:", error);
-    const msg = error.message || '';
-    if (error.status === 429 || msg.includes('429') || msg.includes('exhausted')) {
-       throw new Error("System is busy (Rate Limit). Please wait 1 minute and try again.");
-    }
+    console.error("Shop API Error:", error);
     throw error;
   }
 };
