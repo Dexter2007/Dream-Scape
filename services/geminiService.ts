@@ -7,7 +7,7 @@ const responseCache = new Map<string, any>();
 
 // Helper to generate a cache key
 const getCacheKey = (type: string, data: string, ...args: any[]) => {
-  // Use first 50 chars + length + last 50 chars to create a unique enough key for base64 images without storing the whole string
+  // Use first 50 chars + length + last 50 chars to create a unique enough key
   const dataSignature = `${data.substring(0, 50)}_${data.length}_${data.slice(-50)}`;
   return `${type}_${dataSignature}_${args.join('_')}`;
 };
@@ -56,8 +56,7 @@ const getApiKey = (): string | undefined => {
 // Helper for delays
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Fallback images for products when cropping fails or no box is found
-// These are generic high-quality furniture/decor images to ensure the UI always looks good
+// Fallback images for products
 const FALLBACK_PRODUCT_IMAGES = [
   'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=300&q=80', // Sofa
   'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&w=300&q=80', // Chair
@@ -77,7 +76,6 @@ async function cropImage(base64Image: string, box: number[]): Promise<string> {
     img.crossOrigin = "anonymous";
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      // box is [ymin, xmin, ymax, xmax] on 0-1000 scale
       const [ymin, xmin, ymax, xmax] = box;
       
       const width = img.width;
@@ -88,7 +86,6 @@ async function cropImage(base64Image: string, box: number[]): Promise<string> {
       const w = ((xmax - xmin) / 1000) * width;
       const h = ((ymax - ymin) / 1000) * height;
 
-      // Ensure dimensions are valid
       if (w <= 0 || h <= 0) {
         resolve('');
         return;
@@ -98,9 +95,8 @@ async function cropImage(base64Image: string, box: number[]): Promise<string> {
       canvas.height = h;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        // Draw the cropped portion
         ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 0.9));
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
       } else {
         resolve('');
       }
@@ -110,9 +106,9 @@ async function cropImage(base64Image: string, box: number[]): Promise<string> {
   });
 }
 
-// Helper to resize image if too large (default max dimension 1024px)
-// Reduced from 1536px to 1024px to significantly reduce payload size and help with rate limits
-const resizeImage = (base64Str: string, maxDimension = 1024): Promise<string> => {
+// Helper to resize image
+// OPTIMIZATION: Default to 0.6 quality to reduce payload size significantly for rate limits
+const resizeImage = (base64Str: string, maxDimension = 800): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -121,13 +117,11 @@ const resizeImage = (base64Str: string, maxDimension = 1024): Promise<string> =>
       let w = img.width;
       let h = img.height;
       
-      // If image is small enough, return original
       if (w <= maxDimension && h <= maxDimension) {
         resolve(base64Str);
         return;
       }
 
-      // Calculate new dimensions
       if (w > h) {
         if (w > maxDimension) {
           h = Math.round(h * (maxDimension / w));
@@ -146,8 +140,8 @@ const resizeImage = (base64Str: string, maxDimension = 1024): Promise<string> =>
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(img, 0, 0, w, h);
-        // Return as JPEG with 0.8 quality to further save bandwidth
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
+        // Using 0.6 quality to minimize base64 string size
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
       } else {
         resolve(base64Str);
       }
@@ -156,13 +150,12 @@ const resizeImage = (base64Str: string, maxDimension = 1024): Promise<string> =>
   });
 };
 
-// Retry wrapper for API calls with Aggressive Backoff and Status Updates
-// Reduced default retries from 8 to 4 to prevent excessively long "System busy" states
+// Retry wrapper for API calls with Aggressive Backoff
 async function retryOperation<T>(
   operation: () => Promise<T>, 
   onStatusUpdate?: (msg: string) => void,
-  retries = 4, 
-  initialDelay = 2000
+  retries = 5, 
+  initialDelay = 4000 // Increased delay start
 ): Promise<T> {
   let delay = initialDelay;
   
@@ -170,38 +163,35 @@ async function retryOperation<T>(
     try {
       return await operation();
     } catch (error: any) {
-      // Check for Rate Limit (429), Service Unavailable (503), or Resource Exhausted
       const errorMessage = error.message || '';
       const isRateLimit = error.status === 429 || 
                           errorMessage.includes('429') || 
-                          errorMessage.includes('Resource has been exhausted') ||
+                          errorMessage.includes('exhausted') ||
                           errorMessage.includes('quota');
                           
       const isOverloaded = error.status === 503 || errorMessage.includes('503') || errorMessage.includes('Overloaded');
 
       if (isRateLimit || isOverloaded) {
-        // If this is the last retry, throw the error
         if (i === retries - 1) throw error;
 
-        // Exponential backoff with some jitter to prevent thundering herd
-        const jitter = Math.random() * 500;
+        // Add randomness to prevent synchronized retries
+        const jitter = Math.random() * 1000;
         const currentDelay = delay + jitter;
         const waitSeconds = Math.ceil(currentDelay / 1000);
         
         console.warn(`Rate limit hit (Attempt ${i + 1}/${retries}). Waiting ${waitSeconds}s...`);
         
         if (onStatusUpdate) {
-          onStatusUpdate(`System busy (Rate Limit). Retrying in ${waitSeconds}s...`);
+          onStatusUpdate(`System busy. Retrying in ${waitSeconds}s...`);
         }
 
         await wait(currentDelay);
         
-        // Increase delay for next attempt, cap at 10 seconds (reduced from 15)
-        delay = Math.min(delay * 1.5, 10000);
+        // Aggressive backoff: double the delay each time
+        delay = Math.min(delay * 2, 20000);
         continue;
       }
 
-      // If it's another error (like 400 Bad Request), throw immediately
       throw error;
     }
   }
@@ -216,11 +206,10 @@ export const generateRoomRedesign = async (
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key missing or invalid. Please check your .env file.");
 
-  // Check cache first
   const cacheKey = getCacheKey('redesign', base64Image, style);
   if (responseCache.has(cacheKey)) {
     if (onStatusUpdate) onStatusUpdate("Loading from cache...");
-    await wait(500); // Small artificial delay for UX smoothness
+    await wait(500); 
     return responseCache.get(cacheKey);
   }
 
@@ -230,23 +219,19 @@ export const generateRoomRedesign = async (
   const prompt = `
     Act as a professional interior designer.
     Redesign the room in the input image to fully embody the '${style}' design style.
-    
     REQUIREMENTS:
     1. STRICTLY PRESERVE: Room structure, perspective, window/door placements, and ceiling height.
     2. TRANSFORM: Furniture, decor, materials, colors, lighting to strictly match the '${style}' aesthetic.
     3. QUALITY: Photorealistic, high definition, natural lighting.
-    
     MANDATORY CLEANUP:
-    - DETECT and COMPLETELY REMOVE any existing watermarks, text overlays, logos, or copyright marks.
-    - DO NOT generate any new text, letters, or characters in the image. The output must be purely visual.
-    
+    - REMOVE any existing watermarks or text.
+    - DO NOT generate any text in the image.
     Return only the generated image.
   `;
 
-  // Optimize image size before sending
   if (onStatusUpdate) onStatusUpdate("Optimizing image...");
-  // Use 1024px max dimension for generating images to be safe with limits
-  const optimizedImage = await resizeImage(base64Image, 1024);
+  // OPTIMIZATION: Reduced from 1024 to 800 for better success rate
+  const optimizedImage = await resizeImage(base64Image, 800);
 
   try {
     const result = await retryOperation(async () => {
@@ -255,12 +240,7 @@ export const generateRoomRedesign = async (
         model: modelId,
         contents: {
           parts: [
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: cleanBase64(optimizedImage)
-              }
-            },
+            { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
             { text: prompt }
           ]
         }
@@ -275,30 +255,18 @@ export const generateRoomRedesign = async (
           }
         }
       }
-      throw new Error("No image generated in response.");
-    }, onStatusUpdate, 5, 2000); 
+      throw new Error("No image generated.");
+    }, onStatusUpdate, 5, 4000); 
 
-    // Cache the successful result
     responseCache.set(cacheKey, result);
     return result;
 
   } catch (error: any) {
     console.error("Redesign error:", error);
-    
     const msg = error.message || '';
-
-    if (error.status === 403 || msg.includes('leaked') || msg.includes('key')) {
-      throw new Error("Your API Key has been revoked or is invalid. Please check your .env file.");
+    if (error.status === 429 || msg.includes('429') || msg.includes('exhausted')) {
+       throw new Error("System is busy (Rate Limit). Please wait 1 minute and try again.");
     }
-
-    if (error.status === 400 && msg.includes('API key')) {
-      throw new Error("Invalid API Key. Please check your .env file.");
-    }
-    
-    if (error.status === 429 || msg.includes('429') || msg.includes('exhausted') || msg.includes('quota')) {
-       throw new Error("System is busy (Rate Limit). Please wait a moment and try again.");
-    }
-    
     throw error;
   }
 };
@@ -311,7 +279,6 @@ export const getDesignAdvice = async (
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key missing.");
 
-  // Check cache
   const cacheKey = getCacheKey('advice', base64Image, style);
   if (responseCache.has(cacheKey)) {
     return responseCache.get(cacheKey);
@@ -325,8 +292,8 @@ export const getDesignAdvice = async (
     Provide professional interior design advice in JSON format.
   `;
   
-  // Use optimized image for advice as well to save bandwidth
-  const optimizedImage = await resizeImage(base64Image, 800); // Smaller for analysis
+  // OPTIMIZATION: Reduced from 800 to 512. Analysis doesn't need high res.
+  const optimizedImage = await resizeImage(base64Image, 512);
 
   try {
     const result = await retryOperation(async () => {
@@ -335,12 +302,7 @@ export const getDesignAdvice = async (
         model: modelId,
         contents: {
           parts: [
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: cleanBase64(optimizedImage)
-              }
-            },
+            { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
             { text: prompt }
           ]
         },
@@ -349,32 +311,20 @@ export const getDesignAdvice = async (
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              critique: {
-                type: Type.STRING,
-                description: "A short critique of the current room state.",
-              },
-              suggestions: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: "List of specific actionable steps to achieve the look.",
-              },
+              critique: { type: Type.STRING },
+              suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
               colorPalette: {
                 type: Type.ARRAY,
                 items: {
                   type: Type.OBJECT,
                   properties: {
                     name: { type: Type.STRING },
-                    hex: { type: Type.STRING, description: "Hex color code e.g. #FFFFFF" },
+                    hex: { type: Type.STRING },
                   },
                   required: ["name", "hex"]
-                },
-                description: "A recommended color palette of 5 colors.",
+                }
               },
-              furnitureRecommendations: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: "List of specific furniture or decor items to buy.",
-              }
+              furnitureRecommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
             },
             required: ["critique", "suggestions", "colorPalette", "furnitureRecommendations"]
           }
@@ -383,9 +333,8 @@ export const getDesignAdvice = async (
 
       const jsonText = response.text || "{}";
       return JSON.parse(jsonText) as DesignAdvice;
-    }, onStatusUpdate, 3, 4000); 
+    }, onStatusUpdate, 3, 3000); 
 
-    // Cache result
     responseCache.set(cacheKey, result);
     return result;
 
@@ -402,7 +351,6 @@ export const generateShopTheLook = async (
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key missing.");
 
-  // Check cache
   const cacheKey = getCacheKey('shop', base64Image);
   if (responseCache.has(cacheKey)) {
     return responseCache.get(cacheKey);
@@ -412,22 +360,16 @@ export const generateShopTheLook = async (
   const modelId = 'gemini-3-flash-preview';
 
   const prompt = `
-    Analyze this room image and identify the key furniture and decor products that make up this look.
-    Return a JSON object with:
-    1. title: A catchy title for this room design (e.g. "Minimalist Zen", "Boho Chic Living").
-    2. style: The closest matching design style (e.g. Modern, Bohemian, Industrial, Minimalist, etc.).
-    3. description: A sophisticated, short description of the room's aesthetic and key elements.
-    4. products: A list of 4 to 8 distinct items found in the image.
-       For each product include:
-       - name: A specific, searchable product name (e.g. "Cognac Leather Sectional", "Brass Arc Floor Lamp").
-       - price: An estimated price in USD (integer).
-       - category: One of 'Furniture', 'Lighting', 'Decor', 'Rug', 'Art', 'Plant'.
-       - query: A google shopping search query string for this item.
-       - box_2d: A bounding box [ymin, xmin, ymax, xmax] of the item in the image using a 0-1000 normalized scale.
+    Analyze this room image and identify the key furniture and decor products.
+    Return JSON with:
+    1. title (string)
+    2. style (string)
+    3. description (string)
+    4. products (array of objects with name, price, category, query, box_2d [ymin, xmin, ymax, xmax])
   `;
   
-  // Use optimized image
-  const optimizedImage = await resizeImage(base64Image, 1024);
+  // OPTIMIZATION: Reduced from 1024 to 640. Detection works fine at this res.
+  const optimizedImage = await resizeImage(base64Image, 640);
 
   try {
     const result = await retryOperation(async () => {
@@ -459,8 +401,7 @@ export const generateShopTheLook = async (
                     query: { type: Type.STRING },
                     box_2d: { 
                       type: Type.ARRAY, 
-                      items: { type: Type.NUMBER },
-                      description: "Bounding box [ymin, xmin, ymax, xmax] in 0-1000 coordinates"
+                      items: { type: Type.NUMBER }
                     }
                   },
                   required: ["name", "price", "category", "query", "box_2d"]
@@ -475,18 +416,14 @@ export const generateShopTheLook = async (
       const jsonText = response.text || "{}";
       const data = JSON.parse(jsonText);
       
-      // Transform to LookCollection structure
       const productsWithImages = await Promise.all((data.products || []).map(async (p: any, idx: number) => {
         let imageUrl = '';
         if (p.box_2d && p.box_2d.length === 4) {
-             // Crop the image using the bounding box from the optimized image
-             // Note: cropImage re-loads the image, we should use optimizedImage for consistency
+             // Crop using the optimized image for consistency
              imageUrl = await cropImage(optimizedImage, p.box_2d);
         }
         
-        // Fallback if cropping failed or no box was provided
         if (!imageUrl) {
-           // Use a deterministic random fallback based on index to be stable for this session
            imageUrl = FALLBACK_PRODUCT_IMAGES[Math.floor(Math.random() * FALLBACK_PRODUCT_IMAGES.length)];
         }
         
@@ -505,17 +442,20 @@ export const generateShopTheLook = async (
         title: data.title || "Custom Collection",
         style: data.style || "Modern",
         description: data.description || "A curated collection based on your image.",
-        image: base64Image, // Keep original for display
+        image: base64Image, // Use original for display
         products: productsWithImages
       } as LookCollection;
-    }, onStatusUpdate, 3, 3000); // Reduced to 3 retries for quicker feedback
+    }, onStatusUpdate, 3, 3000);
 
-    // Cache result
     responseCache.set(cacheKey, result);
     return result;
 
   } catch (error: any) {
     console.error("Shop The Look error:", error);
+    const msg = error.message || '';
+    if (error.status === 429 || msg.includes('429') || msg.includes('exhausted')) {
+       throw new Error("System is busy (Rate Limit). Please wait 1 minute and try again.");
+    }
     throw error;
   }
 };
