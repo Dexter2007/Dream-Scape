@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { RoomStyle } from '../types';
 import { ROOM_STYLES } from '../constants';
+import { generateQuizResultDescription } from '../services/geminiService';
 
 interface StyleQuizProps {
   onComplete: (style: string) => void;
@@ -99,6 +100,7 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [scores, setScores] = useState<Record<string, number>>({});
   const [result, setResult] = useState<string | null>(null);
+  const [dynamicDescription, setDynamicDescription] = useState<string | null>(null);
 
   // Initialize random quiz
   useEffect(() => {
@@ -121,6 +123,7 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
     setCurrentQuestionIndex(0);
     setScores({});
     setResult(null);
+    setDynamicDescription(null);
   };
 
   const handleOptionSelect = (style: RoomStyle) => {
@@ -134,28 +137,32 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
     }
   };
 
-  const calculateFinalResult = (finalScores: Record<string, number>) => {
+  const calculateFinalResult = async (finalScores: Record<string, number>) => {
     const sortedScores = Object.entries(finalScores).sort((a, b) => b[1] - a[1]);
     
-    if (sortedScores.length === 0) {
-      setResult(RoomStyle.Modern);
-      return;
-    }
+    let finalStyle = RoomStyle.Modern;
+    if (sortedScores.length > 0) {
+       const [topStyle, topScore] = sortedScores[0];
+       finalStyle = topStyle as RoomStyle;
 
-    const [topStyle, topScore] = sortedScores[0];
-    
-    // Logic: If there is a tie or very close scores, create a hybrid.
-    // Example: If user selected 'Modern' twice and 'Rustic' twice, we make 'Modern + Rustic'
-    let finalStyle = topStyle;
-
-    if (sortedScores.length > 1) {
-       const [secondStyle, secondScore] = sortedScores[1];
-       if (secondScore === topScore) {
-         finalStyle = `${topStyle} + ${secondStyle}`;
+       if (sortedScores.length > 1) {
+          const [secondStyle, secondScore] = sortedScores[1];
+          if (secondScore === topScore) {
+            finalStyle = `${topStyle} + ${secondStyle}` as any;
+          }
        }
     }
     
     setResult(finalStyle);
+    
+    // Generate dynamic description using Gemini Text Model
+    // This runs strictly ON DEMAND when quiz finishes
+    try {
+      const desc = await generateQuizResultDescription(finalStyle);
+      setDynamicDescription(desc);
+    } catch (e) {
+      console.error("Failed to generate description", e);
+    }
   };
 
   const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
@@ -163,11 +170,12 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
   if (questions.length === 0) return <div className="p-8 text-center text-slate-600 dark:text-slate-400">Loading quiz...</div>;
 
   if (result) {
-    // Check if result exists in presets
     const styleInfo = ROOM_STYLES.find(s => s.value === result);
-    // Use generic image for hybrids
+    // Use generic image for hybrids if no direct match
     const displayImage = styleInfo?.image || 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80';
-    const description = styleInfo?.description || `A unique fusion style tailored just for you: ${result}. This custom blend captures the best of both worlds.`;
+    
+    // Use dynamic description if available, otherwise static fallback
+    const description = dynamicDescription || (styleInfo?.description || `A unique fusion style tailored just for you: ${result}.`);
 
     return (
       <div className="max-w-2xl mx-auto py-12 px-4 animate-fade-in-up">
@@ -179,7 +187,6 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
                className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" 
              />
              <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent flex flex-col items-center justify-end pb-8">
-                {/* Watermark */}
                 <div className="absolute top-4 right-4 opacity-70">
                    <span className="font-serif italic text-white text-sm tracking-widest drop-shadow-lg">DreamSpace</span>
                 </div>
@@ -194,8 +201,10 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
             <div className="space-y-4">
               <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Your preferred style is {result}</h3>
               <div className="w-12 h-1 bg-indigo-600 mx-auto rounded-full"></div>
-              <p className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed max-w-lg mx-auto">
-                {description}
+              <p className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed max-w-lg mx-auto min-h-[3rem]">
+                {dynamicDescription ? description : (
+                  <span className="animate-pulse">Curating your style profile...</span>
+                )}
               </p>
             </div>
             
