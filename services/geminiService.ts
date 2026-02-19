@@ -225,35 +225,55 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
   });
 };
 
-// Wrapper that executes operation ONCE.
-// Removed retry loop logic to fail fast.
-async function executeOperation<T>(
+// Reliable Retry Wrapper with Exponential Backoff
+// Max retries limited to 3 to avoid infinite loops, but sufficient for transient spikes.
+async function withRetry<T>(
   operation: () => Promise<T>, 
-  onStatusUpdate?: (msg: string) => void
+  onStatusUpdate?: (msg: string) => void,
+  maxRetries = 3
 ): Promise<T> {
-  try {
-    return await operation();
-  } catch (error: any) {
-    const errorMessage = error.message || '';
-    
-    // Provide user-friendly error messages for common API issues
-    if (error.status === 429 || 
-        errorMessage.includes('429') || 
-        errorMessage.includes('exhausted') || 
-        errorMessage.includes('quota') ||
-        errorMessage.includes('Too Many Requests')) {
-      throw new Error("System is busy (Rate Limit). Please try again in a moment.");
-    }
-    
-    if (error.status === 503 || 
-        errorMessage.includes('503') || 
-        errorMessage.includes('Overloaded') ||
-        errorMessage.includes('Service Unavailable')) {
-      throw new Error("AI Service is currently overloaded. Please try again.");
-    }
+  let attempts = 0;
+  
+  while (attempts < maxRetries) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      attempts++;
+      const errorMessage = error.message || '';
+      
+      const isRateLimit = error.status === 429 || 
+                          errorMessage.includes('429') || 
+                          errorMessage.includes('exhausted') || 
+                          errorMessage.includes('quota') ||
+                          errorMessage.includes('Too Many Requests');
+      
+      const isOverloaded = error.status === 503 || 
+                           errorMessage.includes('503') || 
+                           errorMessage.includes('Overloaded');
 
-    throw error;
+      // If it's not a temporary error, throw immediately (e.g., Invalid API Key)
+      if (!isRateLimit && !isOverloaded) {
+        throw error;
+      }
+
+      // If we've reached max retries, throw a user-friendly error
+      if (attempts >= maxRetries) {
+        throw new Error("System is currently experiencing high traffic. Please try again in a minute.");
+      }
+
+      // Exponential backoff: 2s, 4s, 8s
+      const delay = 2000 * Math.pow(2, attempts - 1);
+      
+      console.warn(`Attempt ${attempts} failed. Retrying in ${delay/1000}s...`);
+      if (onStatusUpdate) {
+        onStatusUpdate(`High traffic. Retrying in ${delay/1000}s...`);
+      }
+      
+      await wait(delay);
+    }
   }
+  
+  throw new Error("Request timed out.");
 }
 
 // ------------------------------------------------------------------
@@ -298,7 +318,7 @@ export const generateRoomRedesign = async (
   const optimizedImage = await resizeImage(base64Image, 640);
 
   try {
-    const result = await executeOperation(async () => {
+    const result = await withRetry(async () => {
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
@@ -320,7 +340,7 @@ export const generateRoomRedesign = async (
         }
       }
       throw new Error("No image generated.");
-    }, onStatusUpdate); 
+    }, onStatusUpdate, 3); // Max 3 retries
 
     cache.set(cacheKey, result);
     return result;
@@ -347,7 +367,6 @@ export const generateQuizResultDescription = async (
   if (cached) return cached;
 
   const ai = new GoogleGenAI({ apiKey });
-  // Use Text Model for text tasks
   const modelId = 'gemini-3-flash-preview';
 
   const prompt = `
@@ -356,13 +375,13 @@ export const generateQuizResultDescription = async (
   `;
 
   try {
-    const result = await executeOperation(async () => {
+    const result = await withRetry(async () => {
       const response = await ai.models.generateContent({
         model: modelId,
         contents: { parts: [{ text: prompt }] }
       });
       return response.text || "";
-    });
+    }, undefined, 2); // Less retries for text
 
     if (result) cache.set(cacheKey, result);
     return result || `A beautiful ${style} aesthetic curated just for you.`;
@@ -384,7 +403,7 @@ export const getDesignAdvice = async (
   if (cached) return cached;
 
   const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-3-flash-preview'; // Text model for analysis
+  const modelId = 'gemini-3-flash-preview'; 
 
   const prompt = `
     Analyze this room image for a '${style}' style redesign.
@@ -394,7 +413,7 @@ export const getDesignAdvice = async (
   const optimizedImage = await resizeImage(base64Image, 480);
 
   try {
-    const result = await executeOperation(async () => {
+    const result = await withRetry(async () => {
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
@@ -429,7 +448,7 @@ export const getDesignAdvice = async (
         }
       });
       return JSON.parse(response.text || "{}") as DesignAdvice;
-    }, onStatusUpdate); 
+    }, onStatusUpdate, 3); 
 
     cache.set(cacheKey, result);
     return result;
@@ -451,7 +470,7 @@ export const generateShopTheLook = async (
   if (cached) return cached;
 
   const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-3-flash-preview'; // Text model for analysis
+  const modelId = 'gemini-3-flash-preview';
 
   const prompt = `
     Analyze this room image and identify the key furniture and decor products.
@@ -465,7 +484,7 @@ export const generateShopTheLook = async (
   const optimizedImage = await resizeImage(base64Image, 480);
 
   try {
-    const result = await executeOperation(async () => {
+    const result = await withRetry(async () => {
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
@@ -536,7 +555,7 @@ export const generateShopTheLook = async (
         image: base64Image,
         products: productsWithImages
       } as LookCollection;
-    }, onStatusUpdate);
+    }, onStatusUpdate, 3);
 
     cache.set(cacheKey, result);
     return result;
