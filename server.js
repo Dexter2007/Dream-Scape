@@ -37,7 +37,8 @@ const getMimeType = (base64Data) => {
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper: Retry Logic
-async function retryOperation(operation, retries = 10, initialDelay = 2000) {
+// Increased retries to 30 to handle sustained high traffic periods
+async function retryOperation(operation, retries = 30, initialDelay = 2000) {
   let delay = initialDelay;
   for (let i = 0; i < retries; i++) {
     try {
@@ -50,14 +51,17 @@ async function retryOperation(operation, retries = 10, initialDelay = 2000) {
       const isOverloaded = status === 503 || msg.includes('503') || msg.includes('Overloaded');
 
       if (isRateLimit || isOverloaded) {
-        if (i === retries - 1) throw error;
+        if (i === retries - 1) {
+           console.error(`[Server] Final retry attempt failed. Error: ${msg}`);
+           throw new Error("System is experiencing exceptionally high traffic. Please try again in a few minutes.");
+        }
         
-        // Jitter
+        // Jitter to prevent thundering herd
         const jitter = Math.random() * 1000;
         await wait(delay + jitter);
         
-        delay = Math.min(delay * 1.5, 15000); // Cap at 15s
-        console.warn(`[Server] Retry attempt ${i+1} due to ${isRateLimit ? 'Rate Limit' : 'Overload'}`);
+        delay = Math.min(delay * 1.5, 10000); // Cap at 10s to keep checking frequently
+        console.warn(`[Server] Retry attempt ${i+1}/${retries} due to ${isRateLimit ? 'Rate Limit' : 'Overload'}`);
         continue;
       }
       throw error;

@@ -131,6 +131,19 @@ export const generateRoomRedesign = async (
 
   if (onStatusUpdate) onStatusUpdate("Sending to design engine...");
   
+  // Set up timers to provide feedback during long polling (High Traffic Handling)
+  const trafficTimer1 = setTimeout(() => {
+    if (onStatusUpdate) onStatusUpdate("High traffic. Auto-retrying in background...");
+  }, 10000);
+
+  const trafficTimer2 = setTimeout(() => {
+    if (onStatusUpdate) onStatusUpdate("Still working... High demand right now.");
+  }, 25000);
+
+  const trafficTimer3 = setTimeout(() => {
+    if (onStatusUpdate) onStatusUpdate("Almost there... Thanks for your patience.");
+  }, 45000);
+
   try {
     const data = await apiCall('/api/redesign', { image: optimizedImage, style });
     if (data.result) {
@@ -141,6 +154,10 @@ export const generateRoomRedesign = async (
   } catch (err: any) {
     console.error("Redesign API Error:", err);
     throw err;
+  } finally {
+    clearTimeout(trafficTimer1);
+    clearTimeout(trafficTimer2);
+    clearTimeout(trafficTimer3);
   }
 };
 
