@@ -100,9 +100,9 @@ async function cropImage(base64Image: string, box: number[]): Promise<string> {
   });
 }
 
-// Helper to resize image if too large (max dimension 1536px)
-// This significantly reduces payload size and helps avoid "Resource Exhausted" errors
-const resizeImage = (base64Str: string, maxDimension = 1536): Promise<string> => {
+// Helper to resize image if too large (default max dimension 1024px)
+// Reduced from 1536px to 1024px to significantly reduce payload size and help with rate limits
+const resizeImage = (base64Str: string, maxDimension = 1024): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -136,8 +136,8 @@ const resizeImage = (base64Str: string, maxDimension = 1536): Promise<string> =>
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(img, 0, 0, w, h);
-        // Return as JPEG with 0.85 quality to save bandwidth
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        // Return as JPEG with 0.8 quality to further save bandwidth
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
       } else {
         resolve(base64Str);
       }
@@ -150,8 +150,8 @@ const resizeImage = (base64Str: string, maxDimension = 1536): Promise<string> =>
 async function retryOperation<T>(
   operation: () => Promise<T>, 
   onStatusUpdate?: (msg: string) => void,
-  retries = 6, 
-  initialDelay = 3000
+  retries = 8, 
+  initialDelay = 2000
 ): Promise<T> {
   let delay = initialDelay;
   
@@ -173,20 +173,20 @@ async function retryOperation<T>(
         if (i === retries - 1) throw error;
 
         // Exponential backoff with some jitter to prevent thundering herd
-        const jitter = Math.random() * 1000;
+        const jitter = Math.random() * 500;
         const currentDelay = delay + jitter;
         const waitSeconds = Math.ceil(currentDelay / 1000);
         
         console.warn(`Rate limit hit (Attempt ${i + 1}/${retries}). Waiting ${waitSeconds}s...`);
         
         if (onStatusUpdate) {
-          onStatusUpdate(`High traffic (${isRateLimit ? 'Rate Limit' : 'Server Busy'}). Retrying in ${waitSeconds}s...`);
+          onStatusUpdate(`System busy (Rate Limit). Retrying in ${waitSeconds}s...`);
         }
 
         await wait(currentDelay);
         
-        // Increase delay for next attempt
-        delay *= 1.5; // Slightly gentler backoff factor to avoid extremely long waits at the end
+        // Increase delay for next attempt, cap at 15 seconds
+        delay = Math.min(delay * 1.5, 15000);
         continue;
       }
 
@@ -226,7 +226,8 @@ export const generateRoomRedesign = async (
 
   // Optimize image size before sending
   if (onStatusUpdate) onStatusUpdate("Optimizing image...");
-  const optimizedImage = await resizeImage(base64Image);
+  // Use 1024px max dimension for generating images to be safe with limits
+  const optimizedImage = await resizeImage(base64Image, 1024);
 
   try {
     return await retryOperation(async () => {
@@ -256,7 +257,7 @@ export const generateRoomRedesign = async (
         }
       }
       throw new Error("No image generated in response.");
-    }, onStatusUpdate, 6, 3000); // 6 retries starting at 3s delay
+    }, onStatusUpdate, 8, 2000); 
   } catch (error: any) {
     console.error("Redesign error:", error);
     
@@ -271,7 +272,7 @@ export const generateRoomRedesign = async (
     }
     
     if (error.status === 429 || msg.includes('429') || msg.includes('exhausted') || msg.includes('quota')) {
-       throw new Error("System is busy (Rate Limit). We retried several times, but the server is still busy. Please wait 1 minute.");
+       throw new Error("System is busy (Rate Limit). Please wait a moment and try again.");
     }
     
     throw error;
@@ -295,7 +296,7 @@ export const getDesignAdvice = async (
   `;
   
   // Use optimized image for advice as well to save bandwidth
-  const optimizedImage = await resizeImage(base64Image, 1024);
+  const optimizedImage = await resizeImage(base64Image, 800); // Smaller for analysis
 
   try {
     return await retryOperation(async () => {
@@ -352,7 +353,7 @@ export const getDesignAdvice = async (
 
       const jsonText = response.text || "{}";
       return JSON.parse(jsonText) as DesignAdvice;
-    }, onStatusUpdate, 3, 5000); // Keep advice retries lower to avoid holding up UI too long
+    }, onStatusUpdate, 3, 4000); 
   } catch (error: any) {
     console.error("Advice error:", error);
     // Silent fail for advice is handled in UI, but we throw here to let UI know
@@ -468,7 +469,7 @@ export const generateShopTheLook = async (
         image: base64Image, // Keep original for display
         products: productsWithImages
       } as LookCollection;
-    }, onStatusUpdate, 3, 5000);
+    }, onStatusUpdate, 5, 3000);
   } catch (error: any) {
     console.error("Shop The Look error:", error);
     throw error;
