@@ -2,97 +2,12 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DesignAdvice, LookCollection } from "../types";
 
-// --- PERSISTENT CACHE IMPLEMENTATION ---
-class PersistentCache {
-  private memoryCache = new Map<string, any>();
-  private prefix = 'dsc_'; // Short prefix
-  private maxAge = 24 * 60 * 60 * 1000; // 24 hours
-
-  constructor() {
-    this.hydrateFromStorage();
-  }
-
-  private hydrateFromStorage() {
-    // Lazy load implementation
-  }
-
-  get(key: string): any | null {
-    // 1. Check memory
-    if (this.memoryCache.has(key)) return this.memoryCache.get(key);
-
-    // 2. Check localStorage
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem(this.prefix + key);
-        if (stored) {
-          const { data, timestamp } = JSON.parse(stored);
-          // Expiry check
-          if (Date.now() - timestamp > this.maxAge) {
-            localStorage.removeItem(this.prefix + key);
-            return null;
-          }
-          this.memoryCache.set(key, data);
-          return data;
-        }
-      } catch (e) {
-        // Ignore parsing errors
-      }
-    }
-    return null;
-  }
-
-  set(key: string, data: any): void {
-    this.memoryCache.set(key, data);
-
-    if (typeof window !== 'undefined') {
-      try {
-        const entry = JSON.stringify({ data, timestamp: Date.now() });
-        localStorage.setItem(this.prefix + key, entry);
-      } catch (e: any) {
-        if (e.name === 'QuotaExceededError' || e.message?.toLowerCase().includes('quota')) {
-          this.pruneCache();
-          try {
-             // Try again after pruning
-             localStorage.setItem(this.prefix + key, JSON.stringify({ data, timestamp: Date.now() }));
-          } catch (retryError) {
-             console.warn("Cache write failed after pruning", retryError);
-          }
-        }
-      }
-    }
-  }
-
-  private pruneCache() {
-    const keys: { key: string, timestamp: number }[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith(this.prefix)) {
-        try {
-          const item = JSON.parse(localStorage.getItem(k) || '{}');
-          keys.push({ key: k, timestamp: item.timestamp || 0 });
-        } catch {
-          keys.push({ key: k, timestamp: 0 });
-        }
-      }
-    }
-
-    // Sort by oldest
-    keys.sort((a, b) => a.timestamp - b.timestamp);
-
-    // Remove oldest 30% to free up significant space
-    const toRemove = Math.ceil(keys.length * 0.3) || 1;
-    for (let i = 0; i < toRemove; i++) {
-       localStorage.removeItem(keys[i].key);
-    }
-  }
-}
-
-const cache = new PersistentCache();
-const resizedImageCache = new Map<string, string>();
+// Simple in-memory cache to prevent redundant API calls
+const responseCache = new Map<string, any>();
 
 // Helper to generate a cache key
 const getCacheKey = (type: string, data: string, ...args: any[]) => {
-  const dataSignature = `${data.substring(0, 30)}_${data.length}_${data.slice(-30)}`;
+  const dataSignature = `${data.substring(0, 50)}_${data.length}_${data.slice(-50)}`;
   return `${type}_${dataSignature}_${args.join('_')}`;
 };
 
@@ -175,12 +90,8 @@ async function cropImage(base64Image: string, box: number[]): Promise<string> {
 }
 
 // Helper to resize image
+// OPTIMIZATION: Aggressive downsizing to save tokens and prevent rate limits
 const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => {
-  const cacheKey = `${base64Str.substring(0, 30)}_${base64Str.length}_${maxDimension}`;
-  if (resizedImageCache.has(cacheKey)) {
-    return Promise.resolve(resizedImageCache.get(cacheKey)!);
-  }
-
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -190,7 +101,6 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
       let h = img.height;
       
       if (w <= maxDimension && h <= maxDimension) {
-        resizedImageCache.set(cacheKey, base64Str);
         resolve(base64Str);
         return;
       }
@@ -214,9 +124,7 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
       if (ctx) {
         ctx.drawImage(img, 0, 0, w, h);
         // 0.5 Quality is sufficient for AI analysis but significantly smaller payload
-        const resized = canvas.toDataURL('image/jpeg', 0.5);
-        resizedImageCache.set(cacheKey, resized);
-        resolve(resized);
+        resolve(canvas.toDataURL('image/jpeg', 0.5));
       } else {
         resolve(base64Str);
       }
@@ -225,54 +133,59 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
   });
 };
 
-// Reliable Retry Wrapper with Exponential Backoff
-// Max retries limited to 3 to avoid infinite loops, but sufficient for transient spikes.
-async function withRetry<T>(
+// Persistent Background Retry Wrapper
+// Keeps trying for a long time if the system is busy, instead of failing early.
+async function retryOperation<T>(
   operation: () => Promise<T>, 
   onStatusUpdate?: (msg: string) => void,
-  maxRetries = 3
+  retries = 60, // Try up to 60 times (approx 5-10 minutes of trying)
+  initialDelay = 3000
 ): Promise<T> {
-  let attempts = 0;
+  let delay = initialDelay;
   
-  while (attempts < maxRetries) {
+  for (let i = 0; i < retries; i++) {
     try {
       return await operation();
     } catch (error: any) {
-      attempts++;
       const errorMessage = error.message || '';
       
+      // Check for retryable errors (Rate Limit 429, Overloaded 503)
       const isRateLimit = error.status === 429 || 
                           errorMessage.includes('429') || 
-                          errorMessage.includes('exhausted') || 
+                          errorMessage.includes('exhausted') ||
                           errorMessage.includes('quota') ||
                           errorMessage.includes('Too Many Requests');
-      
+                          
       const isOverloaded = error.status === 503 || 
                            errorMessage.includes('503') || 
-                           errorMessage.includes('Overloaded');
+                           errorMessage.includes('Overloaded') ||
+                           errorMessage.includes('Service Unavailable');
 
-      // If it's not a temporary error, throw immediately (e.g., Invalid API Key)
+      // If it's a fatal error (like 400 Bad Request, 401 Unauthorized), throw immediately
       if (!isRateLimit && !isOverloaded) {
         throw error;
       }
 
-      // If we've reached max retries, throw a user-friendly error
-      if (attempts >= maxRetries) {
-        throw new Error("System is currently experiencing high traffic. Please try again in a minute.");
+      // If we finally exceeded max retries, throw
+      if (i === retries - 1) throw new Error("Server is currently experiencing very high traffic. Please try again later.");
+
+      // Calculate delay with jitter to prevent synchronized retries
+      const jitter = Math.random() * 2000;
+      const currentDelay = delay + jitter;
+      const waitSeconds = Math.ceil(currentDelay / 1000);
+      
+      console.warn(`Retryable error (Attempt ${i + 1}/${retries}). Waiting ${waitSeconds}s...`);
+      
+      if (onStatusUpdate) {
+        onStatusUpdate(`High traffic. Auto-retrying in ${waitSeconds}s...`);
       }
 
-      // Exponential backoff: 2s, 4s, 8s
-      const delay = 2000 * Math.pow(2, attempts - 1);
+      await wait(currentDelay);
       
-      console.warn(`Attempt ${attempts} failed. Retrying in ${delay/1000}s...`);
-      if (onStatusUpdate) {
-        onStatusUpdate(`High traffic. Retrying in ${delay/1000}s...`);
-      }
-      
-      await wait(delay);
+      // Cap the maximum delay at 15 seconds to keep polling active but polite
+      delay = Math.min(delay * 1.5, 15000);
     }
   }
-  
   throw new Error("Request timed out.");
 }
 
@@ -288,11 +201,10 @@ export const generateRoomRedesign = async (
   if (!apiKey) throw new Error("API Key missing or invalid.");
 
   const cacheKey = getCacheKey('redesign', base64Image, style);
-  const cached = cache.get(cacheKey);
-  if (cached) {
+  if (responseCache.has(cacheKey)) {
     if (onStatusUpdate) onStatusUpdate("Loading from cache...");
-    await wait(200); 
-    return cached;
+    await wait(500); 
+    return responseCache.get(cacheKey);
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -315,10 +227,11 @@ export const generateRoomRedesign = async (
   `;
 
   if (onStatusUpdate) onStatusUpdate("Optimizing image for AI...");
+  // 640px is the sweet spot for GenAI input to balance quality/tokens
   const optimizedImage = await resizeImage(base64Image, 640);
 
   try {
-    const result = await withRetry(async () => {
+    const result = await retryOperation(async () => {
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
@@ -340,9 +253,9 @@ export const generateRoomRedesign = async (
         }
       }
       throw new Error("No image generated.");
-    }, onStatusUpdate, 3); // Max 3 retries
+    }, onStatusUpdate, 60, 5000); 
 
-    cache.set(cacheKey, result);
+    responseCache.set(cacheKey, result);
     return result;
 
   } catch (error: any) {
@@ -363,10 +276,10 @@ export const generateQuizResultDescription = async (
   if (!apiKey) return `A unique fusion style tailored just for you: ${style}.`;
 
   const cacheKey = `quiz_desc_${style}`;
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
+  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
 
   const ai = new GoogleGenAI({ apiKey });
+  // Use Text Model for text tasks
   const modelId = 'gemini-3-flash-preview';
 
   const prompt = `
@@ -375,15 +288,16 @@ export const generateQuizResultDescription = async (
   `;
 
   try {
-    const result = await withRetry(async () => {
+    // Retry less aggressively for text as it's lighter
+    const result = await retryOperation(async () => {
       const response = await ai.models.generateContent({
         model: modelId,
         contents: { parts: [{ text: prompt }] }
       });
       return response.text || "";
-    }, undefined, 2); // Less retries for text
+    }, undefined, 10, 2000); // 10 retries for text
 
-    if (result) cache.set(cacheKey, result);
+    if (result) responseCache.set(cacheKey, result);
     return result || `A beautiful ${style} aesthetic curated just for you.`;
   } catch (e) {
     return `A unique fusion style tailored just for you: ${style}.`;
@@ -399,21 +313,21 @@ export const getDesignAdvice = async (
   if (!apiKey) throw new Error("API Key missing.");
 
   const cacheKey = getCacheKey('advice', base64Image, style);
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
+  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
 
   const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-3-flash-preview'; 
+  const modelId = 'gemini-3-flash-preview'; // Text model for analysis
 
   const prompt = `
     Analyze this room image for a '${style}' style redesign.
     Provide professional interior design advice in JSON format.
   `;
   
+  // 480px is plenty for text analysis
   const optimizedImage = await resizeImage(base64Image, 480);
 
   try {
-    const result = await withRetry(async () => {
+    const result = await retryOperation(async () => {
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
@@ -448,9 +362,9 @@ export const getDesignAdvice = async (
         }
       });
       return JSON.parse(response.text || "{}") as DesignAdvice;
-    }, onStatusUpdate, 3); 
+    }, onStatusUpdate, 30, 3000); 
 
-    cache.set(cacheKey, result);
+    responseCache.set(cacheKey, result);
     return result;
   } catch (error: any) {
     console.error("Advice error:", error);
@@ -466,11 +380,10 @@ export const generateShopTheLook = async (
   if (!apiKey) throw new Error("API Key missing.");
 
   const cacheKey = getCacheKey('shop', base64Image);
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
+  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
 
   const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-3-flash-preview';
+  const modelId = 'gemini-3-flash-preview'; // Text model for analysis
 
   const prompt = `
     Analyze this room image and identify the key furniture and decor products.
@@ -481,10 +394,11 @@ export const generateShopTheLook = async (
     4. products (array of objects with name, price, category, query, box_2d [ymin, xmin, ymax, xmax])
   `;
   
+  // 480px is sufficient for object detection in this context
   const optimizedImage = await resizeImage(base64Image, 480);
 
   try {
-    const result = await withRetry(async () => {
+    const result = await retryOperation(async () => {
       const mimeType = getMimeType(optimizedImage);
       const response = await ai.models.generateContent({
         model: modelId,
@@ -555,12 +469,16 @@ export const generateShopTheLook = async (
         image: base64Image,
         products: productsWithImages
       } as LookCollection;
-    }, onStatusUpdate, 3);
+    }, onStatusUpdate, 30, 3000);
 
-    cache.set(cacheKey, result);
+    responseCache.set(cacheKey, result);
     return result;
   } catch (error: any) {
     console.error("Shop The Look error:", error);
+    const msg = error.message || '';
+    if (error.status === 429 || msg.includes('429') || msg.includes('exhausted')) {
+       throw new Error("System is busy (Rate Limit). Please wait 1 minute and try again.");
+    }
     throw error;
   }
 };
