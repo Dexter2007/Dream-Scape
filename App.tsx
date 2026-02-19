@@ -69,10 +69,62 @@ const App: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // AI Redesign State
-  const [originalImage, setOriginalImage] = useState<string | null>(null);
-  const [selectedStyle, setSelectedStyle] = useState<string>(RoomStyle.Modern);
-  const [result, setResult] = useState<GenerationResult | null>(null);
+  // AI Redesign State - Persisted
+  const [originalImage, setOriginalImage] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('dreamspace_originalImage');
+    return null;
+  });
+
+  const [selectedStyle, setSelectedStyle] = useState<string>(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('dreamspace_selectedStyle') || RoomStyle.Modern;
+    return RoomStyle.Modern;
+  });
+
+  const [result, setResult] = useState<GenerationResult | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dreamspace_result');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error("Failed to parse saved result", e);
+        }
+      }
+    }
+    return null;
+  });
+
+  // Persistence Effects for Redesign State
+  useEffect(() => {
+    if (originalImage) {
+      try {
+        localStorage.setItem('dreamspace_originalImage', originalImage);
+      } catch (e) {
+        console.warn('LocalStorage limit exceeded for image persistence');
+      }
+    } else {
+      localStorage.removeItem('dreamspace_originalImage');
+    }
+  }, [originalImage]);
+
+  useEffect(() => {
+    if (selectedStyle) {
+      localStorage.setItem('dreamspace_selectedStyle', selectedStyle);
+    }
+  }, [selectedStyle]);
+
+  useEffect(() => {
+    if (result) {
+      try {
+        localStorage.setItem('dreamspace_result', JSON.stringify(result));
+      } catch (e) {
+        console.warn('LocalStorage limit exceeded for result persistence');
+      }
+    } else {
+      localStorage.removeItem('dreamspace_result');
+    }
+  }, [result]);
+
   const [loadingState, setLoadingState] = useState<LoadingState>({ isGenerating: false, statusMessage: '' });
   const [isGeneratingAdvice, setIsGeneratingAdvice] = useState(false);
   const [error, setError] = useState<string | null>(null);
