@@ -50,6 +50,28 @@ const getApiKey = (): string | undefined => {
 // Helper for delays
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Helper for retry logic
+const retry = async <T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> => {
+  try {
+    return await fn();
+  } catch (error: any) {
+    const shouldRetry = 
+      error.status === 429 || 
+      error.status === 503 || 
+      error.message?.includes('429') || 
+      error.message?.includes('503') ||
+      error.message?.includes('Overloaded') ||
+      error.message?.includes('quota');
+
+    if (retries > 0 && shouldRetry) {
+      console.log(`Retrying operation... attempts left: ${retries}, waiting ${delay}ms`);
+      await wait(delay);
+      return retry(fn, retries - 1, delay * 2);
+    }
+    throw error;
+  }
+};
+
 // Fallback images
 const FALLBACK_PRODUCT_IMAGES = [
   'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=300&q=80',
@@ -199,15 +221,18 @@ export const generateRoomRedesign = async (
 
   try {
     const mimeType = getMimeType(optimizedImage);
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: {
-        parts: [
-          { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
-          { text: prompt }
-        ]
-      }
-    });
+    
+    const response = await retry(async () => {
+      return await ai.models.generateContent({
+        model: modelId,
+        contents: {
+          parts: [
+            { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
+            { text: prompt }
+          ]
+        }
+      });
+    }, 3, 2000);
 
     if (response.candidates) {
       for (const candidate of response.candidates) {
@@ -253,10 +278,13 @@ export const generateQuizResultDescription = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: { parts: [{ text: prompt }] }
-    });
+    const response = await retry(async () => {
+      return await ai.models.generateContent({
+        model: modelId,
+        contents: { parts: [{ text: prompt }] }
+      });
+    }, 2, 1000);
+    
     const result = response.text || "";
 
     if (result) responseCache.set(cacheKey, result);
@@ -291,38 +319,41 @@ export const getDesignAdvice = async (
 
   try {
     const mimeType = getMimeType(optimizedImage);
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: {
-        parts: [
-          { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
-          { text: prompt }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            critique: { type: Type.STRING },
-            suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
-            colorPalette: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  hex: { type: Type.STRING },
-                },
-                required: ["name", "hex"]
-              }
+    const response = await retry(async () => {
+      return await ai.models.generateContent({
+        model: modelId,
+        contents: {
+          parts: [
+            { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
+            { text: prompt }
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              critique: { type: Type.STRING },
+              suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+              colorPalette: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    hex: { type: Type.STRING },
+                  },
+                  required: ["name", "hex"]
+                }
+              },
+              furnitureRecommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
             },
-            furnitureRecommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
-          },
-          required: ["critique", "suggestions", "colorPalette", "furnitureRecommendations"]
+            required: ["critique", "suggestions", "colorPalette", "furnitureRecommendations"]
+          }
         }
-      }
-    });
+      });
+    }, 3, 2000);
+    
     const result = JSON.parse(response.text || "{}") as DesignAdvice;
 
     responseCache.set(cacheKey, result);
@@ -361,44 +392,46 @@ export const generateShopTheLook = async (
 
   try {
     const mimeType = getMimeType(optimizedImage);
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: {
-        parts: [
-          { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
-          { text: prompt }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            style: { type: Type.STRING },
-            description: { type: Type.STRING },
-            products: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  price: { type: Type.NUMBER },
-                  category: { type: Type.STRING },
-                  query: { type: Type.STRING },
-                  box_2d: { 
-                    type: Type.ARRAY, 
-                    items: { type: Type.NUMBER }
-                  }
-                },
-                required: ["name", "price", "category", "query", "box_2d"]
+    const response = await retry(async () => {
+      return await ai.models.generateContent({
+        model: modelId,
+        contents: {
+          parts: [
+            { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
+            { text: prompt }
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              style: { type: Type.STRING },
+              description: { type: Type.STRING },
+              products: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    price: { type: Type.NUMBER },
+                    category: { type: Type.STRING },
+                    query: { type: Type.STRING },
+                    box_2d: { 
+                      type: Type.ARRAY, 
+                      items: { type: Type.NUMBER }
+                    }
+                  },
+                  required: ["name", "price", "category", "query", "box_2d"]
+                }
               }
-            }
-          },
-          required: ["title", "style", "description", "products"]
+            },
+            required: ["title", "style", "description", "products"]
+          }
         }
-      }
-    });
+      });
+    }, 3, 2000);
 
     const jsonText = response.text || "{}";
     const data = JSON.parse(jsonText);
