@@ -133,61 +133,28 @@ const resizeImage = (base64Str: string, maxDimension = 640): Promise<string> => 
   });
 };
 
-// Persistent Background Retry Wrapper
-// Keeps trying for a long time if the system is busy, instead of failing early.
-async function retryOperation<T>(
-  operation: () => Promise<T>, 
-  onStatusUpdate?: (msg: string) => void,
-  retries = 60, // Try up to 60 times (approx 5-10 minutes of trying)
-  initialDelay = 3000
-): Promise<T> {
-  let delay = initialDelay;
+// Helper to handle API errors
+const handleApiError = (error: any) => {
+  const errorMessage = error.message || '';
   
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await operation();
-    } catch (error: any) {
-      const errorMessage = error.message || '';
-      
-      // Check for retryable errors (Rate Limit 429, Overloaded 503)
-      const isRateLimit = error.status === 429 || 
-                          errorMessage.includes('429') || 
-                          errorMessage.includes('exhausted') ||
-                          errorMessage.includes('quota') ||
-                          errorMessage.includes('Too Many Requests');
-                          
-      const isOverloaded = error.status === 503 || 
-                           errorMessage.includes('503') || 
-                           errorMessage.includes('Overloaded') ||
-                           errorMessage.includes('Service Unavailable');
+  // Check for retryable errors (Rate Limit 429, Overloaded 503)
+  const isRateLimit = error.status === 429 || 
+                      errorMessage.includes('429') || 
+                      errorMessage.includes('exhausted') ||
+                      errorMessage.includes('quota') ||
+                      errorMessage.includes('Too Many Requests');
+                      
+  const isOverloaded = error.status === 503 || 
+                       errorMessage.includes('503') || 
+                       errorMessage.includes('Overloaded') ||
+                       errorMessage.includes('Service Unavailable');
 
-      // If it's a fatal error (like 400 Bad Request, 401 Unauthorized), throw immediately
-      if (!isRateLimit && !isOverloaded) {
-        throw error;
-      }
-
-      // If we finally exceeded max retries, throw
-      if (i === retries - 1) throw new Error("Server is currently experiencing very high traffic. Please try again later.");
-
-      // Calculate delay with jitter to prevent synchronized retries
-      const jitter = Math.random() * 2000;
-      const currentDelay = delay + jitter;
-      const waitSeconds = Math.ceil(currentDelay / 1000);
-      
-      console.warn(`Retryable error (Attempt ${i + 1}/${retries}). Waiting ${waitSeconds}s...`);
-      
-      if (onStatusUpdate) {
-        onStatusUpdate(`High traffic. Auto-retrying in ${waitSeconds}s...`);
-      }
-
-      await wait(currentDelay);
-      
-      // Cap the maximum delay at 15 seconds to keep polling active but polite
-      delay = Math.min(delay * 1.5, 15000);
-    }
+  if (isRateLimit || isOverloaded) {
+    throw new Error("RATE_LIMIT_EXCEEDED");
   }
-  throw new Error("Request timed out.");
-}
+  
+  throw error;
+};
 
 // ------------------------------------------------------------------
 // 1. IMAGE GENERATION (Strictly for Visuals)
@@ -231,36 +198,34 @@ export const generateRoomRedesign = async (
   const optimizedImage = await resizeImage(base64Image, 640);
 
   try {
-    const result = await retryOperation(async () => {
-      const mimeType = getMimeType(optimizedImage);
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: {
-          parts: [
-            { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
-            { text: prompt }
-          ]
-        }
-      });
+    const mimeType = getMimeType(optimizedImage);
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: {
+        parts: [
+          { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
+          { text: prompt }
+        ]
+      }
+    });
 
-      if (response.candidates) {
-        for (const candidate of response.candidates) {
-          for (const part of candidate.content.parts) {
-            if (part.inlineData && part.inlineData.data) {
-              return `data:image/png;base64,${part.inlineData.data}`;
-            }
+    if (response.candidates) {
+      for (const candidate of response.candidates) {
+        for (const part of candidate.content.parts) {
+          if (part.inlineData && part.inlineData.data) {
+            const result = `data:image/png;base64,${part.inlineData.data}`;
+            responseCache.set(cacheKey, result);
+            return result;
           }
         }
       }
-      throw new Error("No image generated.");
-    }, onStatusUpdate, 60, 5000); 
-
-    responseCache.set(cacheKey, result);
-    return result;
+    }
+    throw new Error("No image generated.");
 
   } catch (error: any) {
     console.error("Redesign error:", error);
-    throw error;
+    handleApiError(error);
+    throw error; // Should be unreachable due to handleApiError throwing
   }
 };
 
@@ -288,18 +253,16 @@ export const generateQuizResultDescription = async (
   `;
 
   try {
-    // Retry less aggressively for text as it's lighter
-    const result = await retryOperation(async () => {
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: { parts: [{ text: prompt }] }
-      });
-      return response.text || "";
-    }, undefined, 10, 2000); // 10 retries for text
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: { parts: [{ text: prompt }] }
+    });
+    const result = response.text || "";
 
     if (result) responseCache.set(cacheKey, result);
     return result || `A beautiful ${style} aesthetic curated just for you.`;
   } catch (e) {
+    // For non-critical text, just return fallback instead of throwing
     return `A unique fusion style tailored just for you: ${style}.`;
   }
 };
@@ -327,47 +290,46 @@ export const getDesignAdvice = async (
   const optimizedImage = await resizeImage(base64Image, 480);
 
   try {
-    const result = await retryOperation(async () => {
-      const mimeType = getMimeType(optimizedImage);
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: {
-          parts: [
-            { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
-            { text: prompt }
-          ]
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              critique: { type: Type.STRING },
-              suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
-              colorPalette: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    hex: { type: Type.STRING },
-                  },
-                  required: ["name", "hex"]
-                }
-              },
-              furnitureRecommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
+    const mimeType = getMimeType(optimizedImage);
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: {
+        parts: [
+          { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
+          { text: prompt }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            critique: { type: Type.STRING },
+            suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+            colorPalette: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  hex: { type: Type.STRING },
+                },
+                required: ["name", "hex"]
+              }
             },
-            required: ["critique", "suggestions", "colorPalette", "furnitureRecommendations"]
-          }
+            furnitureRecommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
+          },
+          required: ["critique", "suggestions", "colorPalette", "furnitureRecommendations"]
         }
-      });
-      return JSON.parse(response.text || "{}") as DesignAdvice;
-    }, onStatusUpdate, 30, 3000); 
+      }
+    });
+    const result = JSON.parse(response.text || "{}") as DesignAdvice;
 
     responseCache.set(cacheKey, result);
     return result;
   } catch (error: any) {
     console.error("Advice error:", error);
+    handleApiError(error);
     throw error;
   }
 };
@@ -398,87 +360,82 @@ export const generateShopTheLook = async (
   const optimizedImage = await resizeImage(base64Image, 480);
 
   try {
-    const result = await retryOperation(async () => {
-      const mimeType = getMimeType(optimizedImage);
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: {
-          parts: [
-            { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
-            { text: prompt }
-          ]
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              style: { type: Type.STRING },
-              description: { type: Type.STRING },
-              products: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    price: { type: Type.NUMBER },
-                    category: { type: Type.STRING },
-                    query: { type: Type.STRING },
-                    box_2d: { 
-                      type: Type.ARRAY, 
-                      items: { type: Type.NUMBER }
-                    }
-                  },
-                  required: ["name", "price", "category", "query", "box_2d"]
-                }
+    const mimeType = getMimeType(optimizedImage);
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: {
+        parts: [
+          { inlineData: { mimeType, data: cleanBase64(optimizedImage) } },
+          { text: prompt }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            style: { type: Type.STRING },
+            description: { type: Type.STRING },
+            products: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  price: { type: Type.NUMBER },
+                  category: { type: Type.STRING },
+                  query: { type: Type.STRING },
+                  box_2d: { 
+                    type: Type.ARRAY, 
+                    items: { type: Type.NUMBER }
+                  }
+                },
+                required: ["name", "price", "category", "query", "box_2d"]
               }
-            },
-            required: ["title", "style", "description", "products"]
-          }
+            }
+          },
+          required: ["title", "style", "description", "products"]
         }
-      });
+      }
+    });
 
-      const jsonText = response.text || "{}";
-      const data = JSON.parse(jsonText);
+    const jsonText = response.text || "{}";
+    const data = JSON.parse(jsonText);
+    
+    const productsWithImages = await Promise.all((data.products || []).map(async (p: any, idx: number) => {
+      let imageUrl = '';
+      if (p.box_2d && p.box_2d.length === 4) {
+            imageUrl = await cropImage(optimizedImage, p.box_2d);
+      }
+      if (!imageUrl) {
+          imageUrl = FALLBACK_PRODUCT_IMAGES[Math.floor(Math.random() * FALLBACK_PRODUCT_IMAGES.length)];
+      }
       
-      const productsWithImages = await Promise.all((data.products || []).map(async (p: any, idx: number) => {
-        let imageUrl = '';
-        if (p.box_2d && p.box_2d.length === 4) {
-             imageUrl = await cropImage(optimizedImage, p.box_2d);
-        }
-        if (!imageUrl) {
-           imageUrl = FALLBACK_PRODUCT_IMAGES[Math.floor(Math.random() * FALLBACK_PRODUCT_IMAGES.length)];
-        }
-        
-        return {
-          id: `gen-${idx}`,
-          name: p.name,
-          price: p.price,
-          image: imageUrl, 
-          query: p.query || p.name,
-          category: p.category
-        };
-      }));
-
       return {
-        id: Date.now().toString(),
-        title: data.title || "Custom Collection",
-        style: data.style || "Modern",
-        description: data.description || "A curated collection based on your image.",
-        image: base64Image,
-        products: productsWithImages
-      } as LookCollection;
-    }, onStatusUpdate, 30, 3000);
+        id: `gen-${idx}`,
+        name: p.name,
+        price: p.price,
+        image: imageUrl, 
+        query: p.query || p.name,
+        category: p.category
+      };
+    }));
+
+    const result = {
+      id: Date.now().toString(),
+      title: data.title || "Custom Collection",
+      style: data.style || "Modern",
+      description: data.description || "A curated collection based on your image.",
+      image: base64Image,
+      products: productsWithImages
+    } as LookCollection;
 
     responseCache.set(cacheKey, result);
     return result;
   } catch (error: any) {
     console.error("Shop The Look error:", error);
-    const msg = error.message || '';
-    if (error.status === 429 || msg.includes('429') || msg.includes('exhausted')) {
-       throw new Error("System is busy (Rate Limit). Please wait 1 minute and try again.");
-    }
+    handleApiError(error);
     throw error;
   }
 };

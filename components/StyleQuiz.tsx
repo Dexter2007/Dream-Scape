@@ -101,6 +101,16 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
   const [scores, setScores] = useState<Record<string, number>>({});
   const [result, setResult] = useState<string | null>(null);
   const [dynamicDescription, setDynamicDescription] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCountdown, setRetryCountdown] = useState<number>(0);
+
+  // Retry Countdown Timer
+  useEffect(() => {
+    if (retryCountdown > 0) {
+      const timer = setTimeout(() => setRetryCountdown(prev => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [retryCountdown]);
 
   // Initialize random quiz
   useEffect(() => {
@@ -124,6 +134,8 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
     setScores({});
     setResult(null);
     setDynamicDescription(null);
+    setError(null);
+    setRetryCountdown(0);
   };
 
   const handleOptionSelect = (style: RoomStyle) => {
@@ -154,14 +166,44 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
     }
     
     setResult(finalStyle);
+    setError(null);
+    setRetryCountdown(0);
     
     // Generate dynamic description using Gemini Text Model
     // This runs strictly ON DEMAND when quiz finishes
     try {
       const desc = await generateQuizResultDescription(finalStyle);
       setDynamicDescription(desc);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to generate description", e);
+      if (e.message === 'RATE_LIMIT_EXCEEDED') {
+        setError("System busy. Please wait 60s.");
+        setRetryCountdown(60);
+      } else {
+        setError("Could not generate description.");
+      }
+    }
+  };
+
+  const retryDescription = () => {
+    if (result && retryCountdown === 0) {
+      // Re-run the description generation logic
+      // We can't easily call calculateFinalResult again without scores, 
+      // but we can just call the API directly since we have the result.
+      setError(null);
+      setDynamicDescription(null); // Show loading state
+      
+      generateQuizResultDescription(result)
+        .then(desc => setDynamicDescription(desc))
+        .catch((e: any) => {
+           console.error("Failed to generate description", e);
+           if (e.message === 'RATE_LIMIT_EXCEEDED') {
+             setError("System busy. Please wait 60s.");
+             setRetryCountdown(60);
+           } else {
+             setError("Could not generate description.");
+           }
+        });
     }
   };
 
@@ -201,11 +243,22 @@ export const StyleQuiz: React.FC<StyleQuizProps> = ({ onComplete }) => {
             <div className="space-y-4">
               <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Your preferred style is {result}</h3>
               <div className="w-12 h-1 bg-indigo-600 mx-auto rounded-full"></div>
-              <p className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed max-w-lg mx-auto min-h-[3rem]">
-                {dynamicDescription ? description : (
+              <div className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed max-w-lg mx-auto min-h-[3rem]">
+                {dynamicDescription ? (
+                  description
+                ) : error ? (
+                  <div className="flex flex-col items-center gap-2 animate-fade-in-up">
+                    <span className="text-red-500 text-sm font-medium">{error}</span>
+                    {retryCountdown > 0 ? (
+                       <span className="text-xs text-slate-400 font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">Retry in {retryCountdown}s</span>
+                    ) : (
+                       <button onClick={retryDescription} className="text-xs font-bold text-indigo-600 dark:text-indigo-400 underline hover:no-underline">Retry Description</button>
+                    )}
+                  </div>
+                ) : (
                   <span className="animate-pulse">Curating your style profile...</span>
                 )}
-              </p>
+              </div>
             </div>
             
             <div className="pt-2">

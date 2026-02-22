@@ -250,8 +250,17 @@ export const ShopTheLook: React.FC = () => {
   const [generatedLook, setGeneratedLook] = useState<LookCollection | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryCountdown, setRetryCountdown] = useState<number>(0);
   const resultRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Retry Countdown Timer
+  useEffect(() => {
+    if (retryCountdown > 0) {
+      const timer = setTimeout(() => setRetryCountdown(prev => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [retryCountdown]);
 
   // Infinite Scroll State
   const [displayedCollections, setDisplayedCollections] = useState<LookCollection[]>(INITIAL_COLLECTIONS);
@@ -265,6 +274,7 @@ export const ShopTheLook: React.FC = () => {
     setPreviewImage(base64);
     setAnalyzing(true);
     setError(null);
+    setRetryCountdown(0);
     setGeneratedLook(null);
     try {
        const look = await generateShopTheLook(base64);
@@ -277,7 +287,12 @@ export const ShopTheLook: React.FC = () => {
        }, 100);
     } catch (e: any) {
        console.error(e);
-       setError(e.message || "Failed to analyze image. Please try again.");
+       if (e.message === 'RATE_LIMIT_EXCEEDED') {
+          setError("System busy. Please wait 60s before trying again.");
+          setRetryCountdown(60);
+       } else {
+          setError(e.message || "Failed to analyze image. Please try again.");
+       }
     } finally {
        setAnalyzing(false);
     }
@@ -403,7 +418,15 @@ export const ShopTheLook: React.FC = () => {
             <div className="p-6 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-300 rounded-2xl border border-red-100 dark:border-red-900/50 flex flex-col items-center gap-2 mx-4">
               <span className="font-bold">Analysis Failed</span>
               <span className="text-sm opacity-90">{error}</span>
-              <button onClick={() => setPreviewImage(null)} className="mt-2 text-xs uppercase tracking-wider font-bold underline">Try Again</button>
+              {retryCountdown > 0 ? (
+                <div className="mt-2 text-xs font-semibold uppercase tracking-wider bg-red-100 dark:bg-red-900/30 px-3 py-1.5 rounded-full">
+                  Retry available in {retryCountdown}s
+                </div>
+              ) : (
+                <button onClick={() => setPreviewImage(null)} className="mt-2 text-xs uppercase tracking-wider font-bold underline hover:no-underline">
+                  Try Again
+                </button>
+              )}
             </div>
           )}
         </div>

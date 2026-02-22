@@ -128,6 +128,15 @@ const App: React.FC = () => {
   const [loadingState, setLoadingState] = useState<LoadingState>({ isGenerating: false, statusMessage: '' });
   const [isGeneratingAdvice, setIsGeneratingAdvice] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryCountdown, setRetryCountdown] = useState<number>(0);
+
+  // Retry Countdown Timer
+  useEffect(() => {
+    if (retryCountdown > 0) {
+      const timer = setTimeout(() => setRetryCountdown(prev => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [retryCountdown]);
 
   // Download Menu State
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
@@ -159,6 +168,7 @@ const App: React.FC = () => {
     setOriginalImage(null);
     setResult(null);
     setError(null);
+    setRetryCountdown(0);
     setShowDownloadMenu(false);
     setIsGeneratingAdvice(false);
   };
@@ -182,6 +192,7 @@ const App: React.FC = () => {
         setOriginalImage(base64String);
         setResult(null);
         setError(null);
+        setRetryCountdown(0);
         setShowDownloadMenu(false);
         setIsGeneratingAdvice(false);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -258,6 +269,7 @@ const App: React.FC = () => {
 
     setLoadingState({ isGenerating: true, statusMessage: 'Preparing your design...' });
     setError(null);
+    setRetryCountdown(0);
     setResult({ originalImage, generatedImage: null, advice: null }); 
     setIsGeneratingAdvice(false);
 
@@ -302,7 +314,12 @@ const App: React.FC = () => {
 
     } catch (err: any) {
       console.error("Generation failed", err);
-      setError(err.message || "Something went wrong. Please check your API key and try again.");
+      if (err.message === 'RATE_LIMIT_EXCEEDED') {
+        setError("System is currently experiencing high traffic. Please wait a moment before trying again.");
+        setRetryCountdown(60);
+      } else {
+        setError(err.message || "Something went wrong. Please check your API key and try again.");
+      }
     } finally {
       setLoadingState({ isGenerating: false, statusMessage: '' });
       // Unlock after a brief delay to prevent immediate re-click
@@ -316,15 +333,19 @@ const App: React.FC = () => {
     if (!originalImage || !selectedStyle || isGeneratingAdvice) return;
     
     setIsGeneratingAdvice(true);
+    setError(null);
     
     try {
       const advice = await getDesignAdvice(originalImage, selectedStyle);
       setResult(prev => prev ? { ...prev, advice } : null);
     } catch (err: any) {
       console.error("Advice generation failed", err);
-      // We don't block the UI, just maybe show a small error or allow retry
-      // For now, we'll set the main error for visibility
-      setError("Could not retrieve design advice. Please try again later.");
+      if (err.message === 'RATE_LIMIT_EXCEEDED') {
+         setError("System busy. Please wait 60s before requesting advice again.");
+         setRetryCountdown(60);
+      } else {
+         setError("Could not retrieve design advice. Please try again later.");
+      }
     } finally {
       setIsGeneratingAdvice(false);
     }
@@ -351,45 +372,56 @@ const App: React.FC = () => {
             {/* Hero / Intro */}
             {!originalImage && (
               <div className="relative animate-fade-in-up">
-                <div className="text-center max-w-5xl mx-auto py-16 md:py-32 px-4 relative z-10">
+                <div className="text-center max-w-5xl mx-auto py-20 md:py-32 px-4 relative z-10">
                   
-                  <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight text-slate-900 dark:text-white mb-6 md:mb-8 font-serif leading-tight">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 text-indigo-600 dark:text-indigo-300 text-xs font-bold uppercase tracking-widest mb-8 animate-fade-in-up">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                    </span>
+                    AI-Powered Interior Design
+                  </div>
+
+                  <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight text-slate-900 dark:text-white mb-6 md:mb-8 font-serif leading-tight drop-shadow-sm">
                     Redesign your <br/>
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 drop-shadow-sm">
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 animate-gradient-x">
                       sanctuary.
                     </span>
                   </h1>
                   
-                  <p className="text-lg md:text-xl lg:text-2xl text-slate-600 dark:text-slate-300 mb-8 md:mb-12 font-light leading-relaxed max-w-2xl mx-auto px-2">
+                  <p className="text-lg md:text-xl lg:text-2xl text-slate-600 dark:text-slate-300 mb-10 md:mb-14 font-light leading-relaxed max-w-2xl mx-auto px-4">
                     Experience the future of interior design. Upload a photo, curate your style, and watch your space transform instantly.
                   </p>
 
-                  <div className="max-w-xl mx-auto bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-2 rounded-3xl shadow-2xl shadow-indigo-200/40 dark:shadow-indigo-900/20 border border-white/60 dark:border-slate-700/60 transform hover:scale-[1.01] transition-transform duration-300 ring-1 ring-white/60 dark:ring-slate-700/60">
-                    <ImageUpload onImageSelected={handleImageSelected} />
+                  <div className="max-w-xl mx-auto bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl p-3 rounded-[2.5rem] shadow-2xl shadow-indigo-200/50 dark:shadow-indigo-900/30 border border-white/60 dark:border-slate-700/60 transform hover:scale-[1.01] transition-transform duration-500 ring-1 ring-white/60 dark:ring-slate-700/60 relative group">
+                    <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-[2.5rem] blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+                    <div className="relative bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden">
+                       <ImageUpload onImageSelected={handleImageSelected} />
+                    </div>
                   </div>
 
                   {/* Feature Grid */}
-                  <div className="grid md:grid-cols-3 gap-6 md:gap-8 mt-16 md:mt-24 text-left">
-                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
-                      <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
+                  <div className="grid md:grid-cols-3 gap-6 md:gap-8 mt-20 md:mt-32 text-left">
+                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-3xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl hover:shadow-indigo-100/40 dark:hover:shadow-none transition-all duration-300 group hover:-translate-y-1">
+                      <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mb-6 text-2xl group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300 shadow-inner border border-indigo-100 dark:border-indigo-800/50">
                         🎨
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">15+ Design Styles</h3>
-                      <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base">From Japandi to Cyberpunk, explore a diverse range of aesthetic transformations.</p>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 font-serif">15+ Design Styles</h3>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">From Japandi to Cyberpunk, explore a diverse range of aesthetic transformations tailored to your taste.</p>
                     </div>
-                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
-                       <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
+                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-3xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl hover:shadow-purple-100/40 dark:hover:shadow-none transition-all duration-300 group hover:-translate-y-1">
+                       <div className="w-14 h-14 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-2xl flex items-center justify-center mb-6 text-2xl group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300 shadow-inner border border-purple-100 dark:border-purple-800/50">
                         💡
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Expert Advice</h3>
-                      <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base">Get actionable critiques, color palettes, and furniture suggestions.</p>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 font-serif">Expert Advice</h3>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Get actionable critiques, custom color palettes, and furniture suggestions from our AI design consultant.</p>
                     </div>
-                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
-                       <div className="w-12 h-12 bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
+                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-3xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl hover:shadow-pink-100/40 dark:hover:shadow-none transition-all duration-300 group hover:-translate-y-1">
+                       <div className="w-14 h-14 bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-2xl flex items-center justify-center mb-6 text-2xl group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300 shadow-inner border border-pink-100 dark:border-pink-800/50">
                         ⚡
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Instant Rendering</h3>
-                      <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base">Visualize your new room in seconds with state-of-the-art Generative AI.</p>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 font-serif">Instant Rendering</h3>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Visualize your new room in seconds with state-of-the-art Generative AI. No waiting, just creating.</p>
                     </div>
                   </div>
 
@@ -481,11 +513,11 @@ const App: React.FC = () => {
                     <div className="flex items-center gap-3 w-full md:w-auto">
                       <button
                         onClick={handleGenerate}
-                        disabled={loadingState.isGenerating}
+                        disabled={loadingState.isGenerating || retryCountdown > 0}
                         className="w-full md:w-auto px-6 md:px-10 py-3 md:py-4 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-medium rounded-full transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center gap-2 text-sm md:text-base"
                       >
-                        {loadingState.isGenerating ? 'Designing...' : 'Generate New Design'}
-                        {!loadingState.isGenerating && (
+                        {retryCountdown > 0 ? `Retry in ${retryCountdown}s` : loadingState.isGenerating ? 'Designing...' : 'Generate New Design'}
+                        {!loadingState.isGenerating && retryCountdown === 0 && (
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                             <path fillRule="evenodd" d="M9 4.5a.75.75 0 0 1 .721.544l.813 2.846a3.75 3.75 0 0 0 2.576 2.576l2.846.813a.75.75 0 0 1 0 1.442l-2.846.813a3.75 3.75 0 0 0-2.576 2.576l-.813 2.846a.75.75 0 0 1-1.442 0l-.813-2.846a3.75 3.75 0 0 0-2.576-2.576l-2.846-.813a.75.75 0 0 1 0-1.442l2.846-.813a3.75 3.75 0 0 0 2.576-2.576l.813-2.846A.75.75 0 0 1 9 4.5Z" clipRule="evenodd" />
                           </svg>
@@ -539,6 +571,19 @@ const App: React.FC = () => {
                         {error.includes('API Key') ? 'Setup Required' : 'Generation Failed'}
                       </h3>
                       <p className="text-sm opacity-90">{error}</p>
+                      {retryCountdown > 0 && (
+                        <div className="mt-2 text-xs font-semibold uppercase tracking-wider bg-white/50 dark:bg-black/20 px-2 py-1 rounded inline-block">
+                          Retry available in {retryCountdown}s
+                        </div>
+                      )}
+                      {retryCountdown === 0 && (error.includes("System is currently experiencing high traffic") || error.includes("System busy")) && (
+                        <button 
+                          onClick={handleGenerate}
+                          className="mt-2 text-xs font-bold underline hover:no-underline"
+                        >
+                          Retry Now
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -673,17 +718,17 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col font-sans text-slate-900 dark:text-slate-100 relative selection:bg-indigo-100 selection:text-indigo-900 dark:selection:bg-indigo-900 dark:selection:text-indigo-100 overflow-x-hidden transition-colors duration-300">
       
       {/* Global Background Elements */}
-      <div className="fixed inset-0 -z-10 h-full w-full bg-[#fafaf9] dark:bg-[#0f172a] transition-colors duration-300">
+      <div className="fixed inset-0 -z-10 h-full w-full bg-[#fafaf9] dark:bg-[#0f172a] transition-colors duration-500">
         {/* Dot Pattern Overlay */}
-        <div className="absolute inset-0 opacity-[0.3] dark:opacity-[0.1]" style={{ backgroundImage: 'radial-gradient(#a8a29e 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }}></div>
+        <div className="absolute inset-0 opacity-[0.4] dark:opacity-[0.15]" style={{ backgroundImage: 'radial-gradient(#a8a29e 1px, transparent 1px)', backgroundSize: '32px 32px' }}></div>
         
-        {/* Rich Watercolor Meshes */}
-        <div className="absolute top-[-10%] right-[-5%] w-[700px] h-[700px] bg-gradient-to-br from-indigo-300/30 to-purple-300/30 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-full blur-[100px] pointer-events-none mix-blend-multiply dark:mix-blend-normal animate-blob"></div>
-        <div className="absolute bottom-[-10%] left-[-10%] w-[700px] h-[700px] bg-gradient-to-tr from-rose-300/30 to-orange-200/30 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-full blur-[100px] pointer-events-none mix-blend-multiply dark:mix-blend-normal animate-blob animation-delay-2000"></div>
-        <div className="absolute top-[20%] left-[20%] w-[600px] h-[600px] bg-gradient-to-r from-emerald-200/20 to-teal-200/20 dark:from-teal-900/10 dark:to-emerald-900/10 rounded-full blur-[90px] pointer-events-none mix-blend-multiply dark:mix-blend-normal animate-blob animation-delay-4000"></div>
+        {/* Rich Watercolor Meshes - Softer & More Blended */}
+        <div className="absolute top-[-10%] right-[-5%] w-[800px] h-[800px] bg-gradient-to-br from-indigo-200/40 to-purple-200/40 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-full blur-[120px] pointer-events-none mix-blend-multiply dark:mix-blend-screen animate-blob"></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-[800px] h-[800px] bg-gradient-to-tr from-rose-200/40 to-orange-100/40 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-full blur-[120px] pointer-events-none mix-blend-multiply dark:mix-blend-screen animate-blob animation-delay-2000"></div>
+        <div className="absolute top-[20%] left-[20%] w-[600px] h-[600px] bg-gradient-to-r from-emerald-100/30 to-teal-100/30 dark:from-teal-900/10 dark:to-emerald-900/10 rounded-full blur-[100px] pointer-events-none mix-blend-multiply dark:mix-blend-screen animate-blob animation-delay-4000"></div>
 
-        {/* Central Vignette */}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#fafaf9]/80 dark:to-[#0f172a]/80 pointer-events-none transition-colors duration-300"></div>
+        {/* Central Vignette - Smoother fade */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/30 to-[#fafaf9]/90 dark:via-slate-900/30 dark:to-[#0f172a]/90 pointer-events-none transition-colors duration-500"></div>
       </div>
 
       <Header 
