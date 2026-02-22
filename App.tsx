@@ -151,6 +151,9 @@ const App: React.FC = () => {
   // Throttling Ref
   const isGeneratingRef = useRef(false);
 
+  // Auto-open picker state
+  const [shouldAutoOpenPicker, setShouldAutoOpenPicker] = useState(false);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -354,6 +357,9 @@ const App: React.FC = () => {
   const handleQuizComplete = (style: string) => {
     setSelectedStyle(style);
     setCurrentView('redesign');
+    if (!originalImage) {
+      setShouldAutoOpenPicker(true);
+    }
     // Scroll is handled by useEffect on currentView change
   };
 
@@ -372,56 +378,49 @@ const App: React.FC = () => {
             {/* Hero / Intro */}
             {!originalImage && (
               <div className="relative animate-fade-in-up">
-                <div className="text-center max-w-5xl mx-auto py-20 md:py-32 px-4 relative z-10">
+                <div className="text-center max-w-5xl mx-auto py-16 md:py-32 px-4 relative z-10">
                   
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 text-indigo-600 dark:text-indigo-300 text-xs font-bold uppercase tracking-widest mb-8 animate-fade-in-up">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-                    </span>
-                    AI-Powered Interior Design
-                  </div>
-
-                  <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight text-slate-900 dark:text-white mb-6 md:mb-8 font-serif leading-tight drop-shadow-sm">
+                  <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight text-slate-900 dark:text-white mb-6 md:mb-8 font-serif leading-tight">
                     Redesign your <br/>
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 animate-gradient-x">
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 drop-shadow-sm">
                       sanctuary.
                     </span>
                   </h1>
                   
-                  <p className="text-lg md:text-xl lg:text-2xl text-slate-600 dark:text-slate-300 mb-10 md:mb-14 font-light leading-relaxed max-w-2xl mx-auto px-4">
+                  <p className="text-lg md:text-xl lg:text-2xl text-slate-600 dark:text-slate-300 mb-8 md:mb-12 font-light leading-relaxed max-w-2xl mx-auto px-2">
                     Experience the future of interior design. Upload a photo, curate your style, and watch your space transform instantly.
                   </p>
 
-                  <div className="max-w-xl mx-auto bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl p-3 rounded-[2.5rem] shadow-2xl shadow-indigo-200/50 dark:shadow-indigo-900/30 border border-white/60 dark:border-slate-700/60 transform hover:scale-[1.01] transition-transform duration-500 ring-1 ring-white/60 dark:ring-slate-700/60 relative group">
-                    <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-[2.5rem] blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
-                    <div className="relative bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden">
-                       <ImageUpload onImageSelected={handleImageSelected} />
-                    </div>
+                  <div className="max-w-xl mx-auto bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-2 rounded-3xl shadow-2xl shadow-indigo-200/40 dark:shadow-indigo-900/20 border border-white/60 dark:border-slate-700/60 transform hover:scale-[1.01] transition-transform duration-300 ring-1 ring-white/60 dark:ring-slate-700/60">
+                    <ImageUpload 
+                      onImageSelected={handleImageSelected} 
+                      autoOpen={shouldAutoOpenPicker}
+                      onAutoOpenComplete={() => setShouldAutoOpenPicker(false)}
+                    />
                   </div>
 
                   {/* Feature Grid */}
-                  <div className="grid md:grid-cols-3 gap-6 md:gap-8 mt-20 md:mt-32 text-left">
-                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-3xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl hover:shadow-indigo-100/40 dark:hover:shadow-none transition-all duration-300 group hover:-translate-y-1">
-                      <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mb-6 text-2xl group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300 shadow-inner border border-indigo-100 dark:border-indigo-800/50">
+                  <div className="grid md:grid-cols-3 gap-6 md:gap-8 mt-16 md:mt-24 text-left">
+                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
+                      <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
                         🎨
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 font-serif">15+ Design Styles</h3>
-                      <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">From Japandi to Cyberpunk, explore a diverse range of aesthetic transformations tailored to your taste.</p>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">15+ Design Styles</h3>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base">From Japandi to Cyberpunk, explore a diverse range of aesthetic transformations.</p>
                     </div>
-                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-3xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl hover:shadow-purple-100/40 dark:hover:shadow-none transition-all duration-300 group hover:-translate-y-1">
-                       <div className="w-14 h-14 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-2xl flex items-center justify-center mb-6 text-2xl group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300 shadow-inner border border-purple-100 dark:border-purple-800/50">
+                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
+                       <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
                         💡
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 font-serif">Expert Advice</h3>
-                      <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Get actionable critiques, custom color palettes, and furniture suggestions from our AI design consultant.</p>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Expert Advice</h3>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base">Get actionable critiques, color palettes, and furniture suggestions.</p>
                     </div>
-                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-3xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl hover:shadow-pink-100/40 dark:hover:shadow-none transition-all duration-300 group hover:-translate-y-1">
-                       <div className="w-14 h-14 bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-2xl flex items-center justify-center mb-6 text-2xl group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300 shadow-inner border border-pink-100 dark:border-pink-800/50">
+                    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-6 md:p-8 rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
+                       <div className="w-12 h-12 bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition-transform shadow-inner">
                         ⚡
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 font-serif">Instant Rendering</h3>
-                      <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Visualize your new room in seconds with state-of-the-art Generative AI. No waiting, just creating.</p>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Instant Rendering</h3>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base">Visualize your new room in seconds with state-of-the-art Generative AI.</p>
                     </div>
                   </div>
 
@@ -592,7 +591,7 @@ const App: React.FC = () => {
                 {(result || loadingState.isGenerating) && (
                    <div ref={resultsRef} className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12 scroll-mt-32">
                      {/* Images Area */}
-                     <div className="lg:col-span-2 space-y-4">
+                     <div className="lg:col-span-2 space-y-4 relative z-10">
                         <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-white/60 dark:border-slate-700 aspect-[4/3] bg-white dark:bg-slate-800 group">
                            {loadingState.isGenerating && <LoadingOverlay status={loadingState.statusMessage} />}
                            
@@ -639,7 +638,7 @@ const App: React.FC = () => {
                               </button>
 
                               {showDownloadMenu && (
-                                <div className="absolute right-0 bottom-full mb-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden z-50 animate-fade-in-up origin-bottom-right">
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden z-50 animate-fade-in-up origin-top-right">
                                   <button
                                     onClick={() => handleDownload('png')}
                                     className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-600 dark:hover:text-white transition-colors flex items-center justify-between"
@@ -718,17 +717,17 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col font-sans text-slate-900 dark:text-slate-100 relative selection:bg-indigo-100 selection:text-indigo-900 dark:selection:bg-indigo-900 dark:selection:text-indigo-100 overflow-x-hidden transition-colors duration-300">
       
       {/* Global Background Elements */}
-      <div className="fixed inset-0 -z-10 h-full w-full bg-[#fafaf9] dark:bg-[#0f172a] transition-colors duration-500">
+      <div className="fixed inset-0 -z-10 h-full w-full bg-[#fafaf9] dark:bg-[#0f172a] transition-colors duration-300">
         {/* Dot Pattern Overlay */}
-        <div className="absolute inset-0 opacity-[0.4] dark:opacity-[0.15]" style={{ backgroundImage: 'radial-gradient(#a8a29e 1px, transparent 1px)', backgroundSize: '32px 32px' }}></div>
+        <div className="absolute inset-0 opacity-[0.3] dark:opacity-[0.1]" style={{ backgroundImage: 'radial-gradient(#a8a29e 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }}></div>
         
-        {/* Rich Watercolor Meshes - Softer & More Blended */}
-        <div className="absolute top-[-10%] right-[-5%] w-[800px] h-[800px] bg-gradient-to-br from-indigo-200/40 to-purple-200/40 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-full blur-[120px] pointer-events-none mix-blend-multiply dark:mix-blend-screen animate-blob"></div>
-        <div className="absolute bottom-[-10%] left-[-10%] w-[800px] h-[800px] bg-gradient-to-tr from-rose-200/40 to-orange-100/40 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-full blur-[120px] pointer-events-none mix-blend-multiply dark:mix-blend-screen animate-blob animation-delay-2000"></div>
-        <div className="absolute top-[20%] left-[20%] w-[600px] h-[600px] bg-gradient-to-r from-emerald-100/30 to-teal-100/30 dark:from-teal-900/10 dark:to-emerald-900/10 rounded-full blur-[100px] pointer-events-none mix-blend-multiply dark:mix-blend-screen animate-blob animation-delay-4000"></div>
+        {/* Rich Watercolor Meshes */}
+        <div className="absolute top-[-10%] right-[-5%] w-[700px] h-[700px] bg-gradient-to-br from-indigo-300/30 to-purple-300/30 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-full blur-[100px] pointer-events-none mix-blend-multiply dark:mix-blend-normal animate-blob"></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-[700px] h-[700px] bg-gradient-to-tr from-rose-300/30 to-orange-200/30 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-full blur-[100px] pointer-events-none mix-blend-multiply dark:mix-blend-normal animate-blob animation-delay-2000"></div>
+        <div className="absolute top-[20%] left-[20%] w-[600px] h-[600px] bg-gradient-to-r from-emerald-200/20 to-teal-200/20 dark:from-teal-900/10 dark:to-emerald-900/10 rounded-full blur-[90px] pointer-events-none mix-blend-multiply dark:mix-blend-normal animate-blob animation-delay-4000"></div>
 
-        {/* Central Vignette - Smoother fade */}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/30 to-[#fafaf9]/90 dark:via-slate-900/30 dark:to-[#0f172a]/90 pointer-events-none transition-colors duration-500"></div>
+        {/* Central Vignette */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#fafaf9]/80 dark:to-[#0f172a]/80 pointer-events-none transition-colors duration-300"></div>
       </div>
 
       <Header 
